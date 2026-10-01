@@ -131,6 +131,20 @@ cargo clippy --all-targets
 cargo fmt
 ```
 
+## Versioning
+
+Passticulous follows [Semantic Versioning](https://semver.org/). Releases are
+tagged `vX.Y.Z` and every change is recorded in [CHANGELOG.md](CHANGELOG.md).
+Run `passticulous --version` to see which version you have.
+
+To run a specific release with Docker, check out its tag before building:
+
+```sh
+git fetch --tags
+git checkout v1.0.0
+docker compose up -d --build
+```
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
