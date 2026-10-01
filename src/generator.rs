@@ -1,4 +1,4 @@
-//! Password and passphrase generation.
+//! Password, passphrase and pattern generation.
 //!
 //! All randomness comes from the operating system CSPRNG (`OsRng`) in
 //! production. Indices are drawn with rejection sampling so every character
@@ -14,6 +14,9 @@ pub const DIGITS: &str = "0123456789";
 /// Symbols that are safe to paste into most shells and forms (no quotes,
 /// backslashes or backticks).
 pub const SYMBOLS: &str = "!#$%&()*+,-./:;<=>?@[]^_{|}~";
+/// Every printable ASCII symbol. Pattern mode lets the user pick any subset.
+pub const ALL_SYMBOLS: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+pub const DEFAULT_PATTERN_SYMBOLS: &str = "!@#$%&*?";
 /// Characters that are easily confused with one another in many fonts.
 pub const LOOK_ALIKES: &str = "Il1|O0o";
 
@@ -23,12 +26,143 @@ pub const MAX_LENGTH: usize = 256;
 pub const MIN_WORDS: usize = 3;
 pub const MAX_WORDS: usize = 20;
 pub const MAX_SEPARATOR_LEN: usize = 8;
+pub const MIN_PATTERN_WORDS: usize = 1;
+pub const MAX_PATTERN_WORDS: usize = 5;
+pub const MAX_PATTERN_DIGITS: usize = 16;
+pub const MAX_PATTERN_SYMBOLS: usize = 16;
 
 /// The EFF large wordlist (7776 words), one word per line.
 pub const WORDLIST_RAW: &str = include_str!("../assets/wordlist.txt");
 
-pub static WORDLIST: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| WORDLIST_RAW.lines().filter(|w| !w.is_empty()).collect());
+pub static WORDLIST: LazyLock<Vec<&'static str>> = LazyLock::new(|| parse_wordlist(WORDLIST_RAW));
+
+fn parse_wordlist(raw: &'static str) -> Vec<&'static str> {
+    raw.lines().filter(|w| !w.is_empty()).collect()
+}
+
+/// Themed word lists for pattern mode. `Any` is the full EFF wordlist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordCategory {
+    Any,
+    Animals,
+    Colors,
+    Foods,
+    Nature,
+    Space,
+}
+
+static CATEGORY_WORDS: LazyLock<Vec<Vec<&'static str>>> = LazyLock::new(|| {
+    WordCategory::ALL
+        .iter()
+        .map(|c| parse_wordlist(c.raw()))
+        .collect()
+});
+
+impl WordCategory {
+    pub const ALL: [WordCategory; 6] = [
+        Self::Any,
+        Self::Animals,
+        Self::Colors,
+        Self::Foods,
+        Self::Nature,
+        Self::Space,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::Animals => "animals",
+            Self::Colors => "colors",
+            Self::Foods => "foods",
+            Self::Nature => "nature",
+            Self::Space => "space",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.name() == name)
+    }
+
+    /// The list as stored on disk, one word per line.
+    pub fn raw(self) -> &'static str {
+        match self {
+            Self::Any => WORDLIST_RAW,
+            Self::Animals => include_str!("../assets/categories/animals.txt"),
+            Self::Colors => include_str!("../assets/categories/colors.txt"),
+            Self::Foods => include_str!("../assets/categories/foods.txt"),
+            Self::Nature => include_str!("../assets/categories/nature.txt"),
+            Self::Space => include_str!("../assets/categories/space.txt"),
+        }
+    }
+
+    pub fn words(self) -> &'static [&'static str] {
+        &CATEGORY_WORDS[self as usize]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordCase {
+    /// `Giraffe`
+    Title,
+    /// `giraffe`
+    Lower,
+    /// `GIRAFFE`
+    Upper,
+}
+
+impl WordCase {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "title" => Some(Self::Title),
+            "lower" => Some(Self::Lower),
+            "upper" => Some(Self::Upper),
+            _ => None,
+        }
+    }
+
+    fn apply(self, word: &str) -> String {
+        match self {
+            Self::Title => capitalize(word),
+            Self::Lower => word.to_lowercase(),
+            Self::Upper => word.to_uppercase(),
+        }
+    }
+}
+
+/// One section of a pattern password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    Word,
+    Digits,
+    Symbols,
+}
+
+impl Part {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "word" | "words" => Some(Self::Word),
+            "digits" | "numbers" => Some(Self::Digits),
+            "symbols" => Some(Self::Symbols),
+            _ => None,
+        }
+    }
+
+    /// Parses an order like `word,digits,symbols`. Each part must appear once.
+    pub fn parse_order(s: &str) -> Option<[Part; 3]> {
+        let parts: Vec<Part> = s
+            .split(',')
+            .map(|p| Part::from_name(p.trim()))
+            .collect::<Option<_>>()?;
+        let order: [Part; 3] = parts.try_into().ok()?;
+        is_permutation(&order).then_some(order)
+    }
+}
+
+fn is_permutation(order: &[Part; 3]) -> bool {
+    [Part::Word, Part::Digits, Part::Symbols]
+        .iter()
+        .all(|p| order.contains(p))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
@@ -36,6 +170,12 @@ pub enum GenerateError {
     LengthOutOfRange,
     WordCountOutOfRange,
     SeparatorTooLong,
+    PatternWordsOutOfRange,
+    DigitCountOutOfRange,
+    SymbolCountOutOfRange,
+    NoSymbolsSelected,
+    InvalidSymbol(char),
+    InvalidOrder,
 }
 
 impl fmt::Display for GenerateError {
@@ -53,6 +193,24 @@ impl fmt::Display for GenerateError {
                     f,
                     "separator must be at most {MAX_SEPARATOR_LEN} characters"
                 )
+            }
+            Self::PatternWordsOutOfRange => write!(
+                f,
+                "words must be between {MIN_PATTERN_WORDS} and {MAX_PATTERN_WORDS}"
+            ),
+            Self::DigitCountOutOfRange => {
+                write!(f, "digit count must be between 0 and {MAX_PATTERN_DIGITS}")
+            }
+            Self::SymbolCountOutOfRange => {
+                write!(
+                    f,
+                    "symbol count must be between 0 and {MAX_PATTERN_SYMBOLS}"
+                )
+            }
+            Self::NoSymbolsSelected => write!(f, "choose at least one symbol to use"),
+            Self::InvalidSymbol(c) => write!(f, "'{c}' is not an allowed symbol"),
+            Self::InvalidOrder => {
+                write!(f, "order must list word, digits and symbols once each")
             }
         }
     }
@@ -96,6 +254,36 @@ impl Default for PassphraseOptions {
             words: 6,
             separator: "-".to_string(),
             capitalize: false,
+        }
+    }
+}
+
+/// Options for pattern passwords such as `Giraffe3287#@!`.
+#[derive(Debug, Clone)]
+pub struct PatternOptions {
+    pub category: WordCategory,
+    pub words: usize,
+    pub case: WordCase,
+    pub digits: usize,
+    pub symbols: usize,
+    /// The symbols to choose from. Duplicates are ignored.
+    pub symbol_set: String,
+    pub order: [Part; 3],
+    /// Placed between every word and section. Empty by default.
+    pub separator: String,
+}
+
+impl Default for PatternOptions {
+    fn default() -> Self {
+        Self {
+            category: WordCategory::Animals,
+            words: 1,
+            case: WordCase::Title,
+            digits: 4,
+            symbols: 3,
+            symbol_set: DEFAULT_PATTERN_SYMBOLS.to_string(),
+            order: [Part::Word, Part::Digits, Part::Symbols],
+            separator: String::new(),
         }
     }
 }
@@ -207,6 +395,75 @@ pub fn generate_passphrase<R: RngCore + ?Sized>(
     Ok(Generated {
         value: words.join(&opts.separator),
         entropy_bits: opts.words as f64 * (list.len() as f64).log2(),
+    })
+}
+
+/// Generates a pattern password: themed words, then a run of digits, then a
+/// run of symbols (in the configured order). Each word, digit and symbol is
+/// chosen independently and uniformly.
+pub fn generate_pattern<R: RngCore + ?Sized>(
+    rng: &mut R,
+    opts: &PatternOptions,
+) -> Result<Generated, GenerateError> {
+    if !(MIN_PATTERN_WORDS..=MAX_PATTERN_WORDS).contains(&opts.words) {
+        return Err(GenerateError::PatternWordsOutOfRange);
+    }
+    if opts.digits > MAX_PATTERN_DIGITS {
+        return Err(GenerateError::DigitCountOutOfRange);
+    }
+    if opts.symbols > MAX_PATTERN_SYMBOLS {
+        return Err(GenerateError::SymbolCountOutOfRange);
+    }
+    if opts.separator.chars().count() > MAX_SEPARATOR_LEN {
+        return Err(GenerateError::SeparatorTooLong);
+    }
+    if !is_permutation(&opts.order) {
+        return Err(GenerateError::InvalidOrder);
+    }
+    let mut symbol_set: Vec<char> = Vec::new();
+    for c in opts.symbol_set.chars() {
+        if !ALL_SYMBOLS.contains(c) {
+            return Err(GenerateError::InvalidSymbol(c));
+        }
+        if !symbol_set.contains(&c) {
+            symbol_set.push(c);
+        }
+    }
+    if opts.symbols > 0 && symbol_set.is_empty() {
+        return Err(GenerateError::NoSymbolsSelected);
+    }
+
+    let list = opts.category.words();
+    let digits: Vec<char> = DIGITS.chars().collect();
+    let mut segments: Vec<String> = Vec::new();
+    for part in opts.order {
+        match part {
+            Part::Word => segments.extend(
+                (0..opts.words).map(|_| opts.case.apply(list[uniform_index(rng, list.len())])),
+            ),
+            Part::Digits if opts.digits > 0 => segments.push(
+                (0..opts.digits)
+                    .map(|_| digits[uniform_index(rng, digits.len())])
+                    .collect(),
+            ),
+            Part::Symbols if opts.symbols > 0 => segments.push(
+                (0..opts.symbols)
+                    .map(|_| symbol_set[uniform_index(rng, symbol_set.len())])
+                    .collect(),
+            ),
+            Part::Digits | Part::Symbols => {}
+        }
+    }
+
+    let mut entropy_bits = opts.words as f64 * (list.len() as f64).log2()
+        + opts.digits as f64 * (digits.len() as f64).log2();
+    if opts.symbols > 0 {
+        entropy_bits += opts.symbols as f64 * (symbol_set.len() as f64).log2();
+    }
+
+    Ok(Generated {
+        value: segments.join(&opts.separator),
+        entropy_bits,
     })
 }
 
@@ -473,5 +730,217 @@ mod tests {
             generate_passphrase(&mut rng, &opts).unwrap_err(),
             GenerateError::SeparatorTooLong
         );
+    }
+
+    #[test]
+    fn all_symbols_is_printable_ascii_punctuation() {
+        let expected: String = (b'!'..=b'~')
+            .map(char::from)
+            .filter(|c| c.is_ascii_punctuation())
+            .collect();
+        let mut actual: Vec<char> = ALL_SYMBOLS.chars().collect();
+        actual.sort_unstable();
+        assert_eq!(actual.into_iter().collect::<String>(), expected);
+        assert!(SYMBOLS.chars().all(|c| ALL_SYMBOLS.contains(c)));
+        assert!(
+            DEFAULT_PATTERN_SYMBOLS
+                .chars()
+                .all(|c| ALL_SYMBOLS.contains(c))
+        );
+    }
+
+    #[test]
+    fn category_lists_are_clean() {
+        for category in WordCategory::ALL {
+            let words = category.words();
+            assert!(
+                words.len() >= 90,
+                "{} has {} words",
+                category.name(),
+                words.len()
+            );
+            let unique: HashSet<_> = words.iter().collect();
+            assert_eq!(
+                unique.len(),
+                words.len(),
+                "{} has duplicates",
+                category.name()
+            );
+            assert!(
+                words.iter().all(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c == '-')),
+                "{} has an invalid word",
+                category.name()
+            );
+            assert_eq!(WordCategory::from_name(category.name()), Some(category));
+        }
+        assert_eq!(WordCategory::Any.words().len(), 7776);
+        assert!(WordCategory::Animals.words().contains(&"giraffe"));
+        assert_eq!(WordCategory::from_name("dinosaurs"), None);
+    }
+
+    #[test]
+    fn pattern_default_looks_like_word_digits_symbols() {
+        let mut rng = rng();
+        let opts = PatternOptions::default();
+        for _ in 0..200 {
+            let pw = generate_pattern(&mut rng, &opts).unwrap().value;
+            let word: String = pw.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+            let rest = &pw[word.len()..];
+            assert!(
+                WordCategory::Animals
+                    .words()
+                    .contains(&word.to_lowercase().as_str()),
+                "{pw}"
+            );
+            assert!(word.starts_with(|c: char| c.is_ascii_uppercase()), "{pw}");
+            assert!(word[1..].chars().all(|c| c.is_ascii_lowercase()), "{pw}");
+            assert_eq!(rest.len(), 7, "{pw}");
+            assert!(rest[..4].chars().all(|c| c.is_ascii_digit()), "{pw}");
+            assert!(
+                rest[4..]
+                    .chars()
+                    .all(|c| DEFAULT_PATTERN_SYMBOLS.contains(c)),
+                "{pw}"
+            );
+        }
+    }
+
+    #[test]
+    fn pattern_respects_order_case_separator_and_symbol_set() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            category: WordCategory::Colors,
+            words: 2,
+            case: WordCase::Upper,
+            digits: 3,
+            symbols: 2,
+            symbol_set: "##@".to_string(),
+            order: [Part::Symbols, Part::Word, Part::Digits],
+            separator: ".".to_string(),
+        };
+        for _ in 0..100 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            let segments: Vec<&str> = pp.value.split('.').collect();
+            assert_eq!(segments.len(), 4, "{}", pp.value);
+            assert!(segments[0].len() == 2 && segments[0].chars().all(|c| c == '#' || c == '@'));
+            for word in &segments[1..3] {
+                assert!(word.chars().all(|c| c.is_ascii_uppercase()), "{}", pp.value);
+                assert!(
+                    WordCategory::Colors
+                        .words()
+                        .contains(&word.to_lowercase().as_str())
+                );
+            }
+            assert!(segments[3].len() == 3 && segments[3].chars().all(|c| c.is_ascii_digit()));
+            // Duplicate '#' is ignored: two symbols from a set of 2 = 2 bits.
+            let colors = WordCategory::Colors.words().len() as f64;
+            let expected = 2.0 * colors.log2() + 3.0 * 10f64.log2() + 2.0;
+            assert!((pp.entropy_bits - expected).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn pattern_can_skip_digits_and_symbols() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            words: 3,
+            case: WordCase::Lower,
+            digits: 0,
+            symbols: 0,
+            symbol_set: String::new(),
+            separator: "-".to_string(),
+            ..Default::default()
+        };
+        let pw = generate_pattern(&mut rng, &opts).unwrap().value;
+        let words: Vec<&str> = pw.split('-').collect();
+        assert_eq!(words.len(), 3, "{pw}");
+        assert!(
+            words
+                .iter()
+                .all(|w| WordCategory::Animals.words().contains(w)),
+            "{pw}"
+        );
+    }
+
+    #[test]
+    fn pattern_rejects_invalid_options() {
+        let mut rng = rng();
+        let cases = [
+            (
+                PatternOptions {
+                    words: 0,
+                    ..Default::default()
+                },
+                GenerateError::PatternWordsOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    words: MAX_PATTERN_WORDS + 1,
+                    ..Default::default()
+                },
+                GenerateError::PatternWordsOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    digits: MAX_PATTERN_DIGITS + 1,
+                    ..Default::default()
+                },
+                GenerateError::DigitCountOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    symbols: MAX_PATTERN_SYMBOLS + 1,
+                    ..Default::default()
+                },
+                GenerateError::SymbolCountOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    symbol_set: String::new(),
+                    ..Default::default()
+                },
+                GenerateError::NoSymbolsSelected,
+            ),
+            (
+                PatternOptions {
+                    symbol_set: "#a".to_string(),
+                    ..Default::default()
+                },
+                GenerateError::InvalidSymbol('a'),
+            ),
+            (
+                PatternOptions {
+                    order: [Part::Word, Part::Word, Part::Digits],
+                    ..Default::default()
+                },
+                GenerateError::InvalidOrder,
+            ),
+            (
+                PatternOptions {
+                    separator: "x".repeat(MAX_SEPARATOR_LEN + 1),
+                    ..Default::default()
+                },
+                GenerateError::SeparatorTooLong,
+            ),
+        ];
+        for (opts, expected) in cases {
+            assert_eq!(
+                generate_pattern(&mut rng, &opts).unwrap_err(),
+                expected,
+                "{opts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_order_accepts_permutations_only() {
+        assert_eq!(
+            Part::parse_order("symbols, word ,numbers"),
+            Some([Part::Symbols, Part::Word, Part::Digits])
+        );
+        assert_eq!(Part::parse_order("word,digits"), None);
+        assert_eq!(Part::parse_order("word,digits,digits"), None);
+        assert_eq!(Part::parse_order("word,digits,symbols,word"), None);
+        assert_eq!(Part::parse_order("word,letters,symbols"), None);
     }
 }
