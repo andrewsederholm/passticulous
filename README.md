@@ -23,8 +23,9 @@ an optional HTTP API for scripts and `curl`.
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
   like `#@!`, every time), the order of the three parts, and an optional
   separator.
-- **Themes**: light, dark or follow the device, with every color adjustable.
-  Set the default for your instance, and visitors can tweak it for themselves.
+- **Themes**: light, dark or follow the device, with every color adjustable
+  and nine one-click presets. Set the default for your instance, and visitors
+  can tweak it for themselves.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
   generated values never leave your browser.
 - **Server API**: `GET /api/generate` for scripts, using the OS CSPRNG.
@@ -201,7 +202,8 @@ Any color you leave out keeps the built-in light or dark value. Text on accent
 buttons switches between black and white automatically to stay readable.
 
 Visitors can override the mode and every color under **Appearance** at the
-bottom of the page. Their choices are saved only in their browser, and
+bottom of the page, or pick one of the ready-made presets (Ocean, Forest,
+Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Their choices are saved only in their browser, and
 **Reset to default** goes back to your settings.
 
 ## API

@@ -219,6 +219,7 @@ const el = {
   themeMode: $("theme-mode"),
   themeColors: [...$("theme-colors").querySelectorAll("input[type=color]")],
   themeReset: $("theme-reset"),
+  themePresets: $("theme-presets"),
 };
 
 let mode = "password";
@@ -436,6 +437,41 @@ function flash(button, text) {
 
 // ---------- appearance (see theme.js) ----------
 
+// Ready-made looks. Each sets the mode and all six colors; text, secondary
+// text and the accent all meet WCAG AA contrast on the background and panels.
+const THEME_PRESETS = [
+  { name: "Ocean", mode: "light", colors: { bg: "#eef5fa", surface: "#ffffff", text: "#0f2a3d", muted: "#46606f", border: "#cddfea", accent: "#0a6aa8" } },
+  { name: "Forest", mode: "light", colors: { bg: "#f0f5ef", surface: "#ffffff", text: "#1a2e1f", muted: "#4d6454", border: "#d0e0d1", accent: "#2a7343" } },
+  { name: "Fall", mode: "light", colors: { bg: "#fbf3ea", surface: "#fffaf4", text: "#3a2414", muted: "#73533c", border: "#ead6c2", accent: "#b4400c" } },
+  { name: "Rose", mode: "light", colors: { bg: "#fcf1f4", surface: "#ffffff", text: "#3b1d29", muted: "#77505f", border: "#efd1dc", accent: "#b0175a" } },
+  { name: "Sand", mode: "light", colors: { bg: "#fdf6e3", surface: "#fffcf2", text: "#073642", muted: "#52666d", border: "#e6dcc0", accent: "#1f6fa8" } },
+  { name: "Midnight", mode: "dark", colors: { bg: "#0b1220", surface: "#131c2e", text: "#e2e8f5", muted: "#93a0ba", border: "#26334d", accent: "#60a5fa" } },
+  { name: "Arctic", mode: "dark", colors: { bg: "#2e3440", surface: "#3b4252", text: "#eceff4", muted: "#b3bccb", border: "#4c566a", accent: "#88c0d0" } },
+  { name: "Grape", mode: "dark", colors: { bg: "#282a36", surface: "#343746", text: "#f8f8f2", muted: "#b4b9d4", border: "#4a4e63", accent: "#bd93f9" } },
+  { name: "Graphite", mode: "dark", colors: { bg: "#151515", surface: "#202020", text: "#ececec", muted: "#a3a3a3", border: "#363636", accent: "#d4d4d4" } },
+];
+
+function isPreset(theme, preset) {
+  return theme.mode === preset.mode && THEME_COLORS.every((name) => theme.colors[name] === preset.colors[name]);
+}
+
+function buildPresetButtons() {
+  for (const preset of THEME_PRESETS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "preset";
+    button.setAttribute("aria-pressed", "false");
+    const swatch = document.createElement("span");
+    swatch.className = "preset-swatch";
+    swatch.setAttribute("aria-hidden", "true");
+    swatch.style.setProperty("--swatch-bg", preset.colors.bg);
+    swatch.style.setProperty("--swatch-accent", preset.colors.accent);
+    button.append(swatch, preset.name);
+    button.preset = preset;
+    el.themePresets.append(button);
+  }
+}
+
 /** Normalizes "#abc" or "#aabbcc" to "#aabbcc"; anything else gives null. */
 function toHex6(value) {
   const v = value.trim().toLowerCase();
@@ -453,6 +489,13 @@ function showTheme(theme) {
     const color = toHex6(style.getPropertyValue(`--${input.dataset.color}`));
     if (color) input.value = color;
   }
+  showActivePreset(theme);
+}
+
+function showActivePreset(theme) {
+  for (const button of el.themePresets.children) {
+    button.setAttribute("aria-pressed", String(isPreset(theme, button.preset)));
+  }
 }
 
 function initAppearance() {
@@ -461,8 +504,16 @@ function initAppearance() {
     saveTheme(theme);
     applyTheme(theme);
   };
+  buildPresetButtons();
   showTheme(theme);
 
+  for (const button of el.themePresets.children) {
+    button.addEventListener("click", () => {
+      theme = { mode: button.preset.mode, colors: { ...button.preset.colors } };
+      update();
+      showTheme(theme);
+    });
+  }
   el.themeMode.addEventListener("input", () => {
     theme.mode = el.themeMode.value;
     update();
@@ -472,6 +523,7 @@ function initAppearance() {
     input.addEventListener("input", () => {
       theme.colors[input.dataset.color] = input.value.toLowerCase();
       update();
+      showActivePreset(theme);
     });
   }
   el.themeReset.addEventListener("click", () => {

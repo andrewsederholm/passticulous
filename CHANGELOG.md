@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Theme presets under **Appearance**: Ocean, Forest, Fall, Rose and Sand
+  (light), and Midnight, Arctic, Grape and Graphite (dark). One click sets the
+  mode and all six colors, and you can still adjust any color afterwards.
+
 ## [1.4.0] - 2026-10-01
 
 ### Added
