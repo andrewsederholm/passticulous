@@ -101,11 +101,17 @@
         <label for="pattern-digits">Numbers <span id="pattern-digits-value" class="value"></span></label>
         <input type="range" id="pattern-digits" min="0" max="16" value="4">
       </div>
-      <div class="field">
+      <label class="check fixed-toggle"><input type="checkbox" id="pattern-fixed"> Use the same symbols every time</label>
+      <div id="pattern-fixed-field" class="field" hidden>
+        <label for="pattern-fixed-symbols">Symbols, in order</label>
+        <input type="text" id="pattern-fixed-symbols" value="#@!" maxlength="16" placeholder="#@!" autocomplete="off" spellcheck="false">
+        <p class="hint small">These exact symbols are used for every password, so they add no strength.</p>
+      </div>
+      <div id="pattern-symbols-field" class="field">
         <label for="pattern-symbols">Symbols <span id="pattern-symbols-value" class="value"></span></label>
         <input type="range" id="pattern-symbols" min="0" max="16" value="3">
       </div>
-      <fieldset class="symbol-picker">
+      <fieldset id="symbol-picker" class="symbol-picker">
         <legend>Allowed symbols <span id="symbol-picked" class="value"></span></legend>
         <div id="symbol-chips" class="chips"></div>
         <div class="chip-actions">

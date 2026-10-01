@@ -18,8 +18,8 @@ an optional HTTP API for scripts and `curl`.
 - **Patterns**: memorable passwords like `Giraffe3287#@!`. Pick a word type
   (animals, colors, foods, nature, space, or any EFF word), 1–5 words and their
   case (Title, lower, UPPER), how many numbers (0–16) and symbols (0–16),
-  exactly which symbols are allowed, the order of the three parts, and an
-  optional separator.
+  exactly which symbols are allowed (or the same fixed symbols, like `#@!`,
+  every time), the order of the three parts, and an optional separator.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
   generated values never leave your browser.
 - **Server API**: `GET /api/generate` for scripts, using the OS CSPRNG.
@@ -203,6 +203,7 @@ updates afterwards.
 | `digit_count`         | `4`        | pattern    | 0–16                           |
 | `symbol_count`        | `3`        | pattern    | 0–16                           |
 | `symbol_set`          | `!@#$%&*?` | pattern    | any ASCII symbols; URL-encode it (`#` is `%23`) |
+| `fixed_symbols`       | none       | pattern    | 1–16 ASCII symbols used as-is every time; overrides `symbol_count` and `symbol_set` |
 | `order`               | `word,digits,symbols` | pattern | each part exactly once |
 
 ```sh
@@ -214,6 +215,9 @@ gravity-unsalted-overdue-shrank-comply
 
 $ curl -s 'http://localhost:8080/api/generate?mode=pattern&category=animals&digit_count=4&symbol_set=%23%40%21&format=text'
 Giraffe3287#@!
+
+$ curl -s 'http://localhost:8080/api/generate?mode=pattern&fixed_symbols=%23%40%21&format=text'
+Otter5102#@!
 ```
 
 Invalid parameters return `400` with `{"error": "..."}`.
@@ -249,7 +253,8 @@ runtime image has no shell or curl.
 - **Entropy figures** assume the attacker knows your settings. They are
   `length × log2(pool size)` for passwords and `words × log2(7776)` for
   passphrases. Patterns add `log2` of the word list size per word, ~3.3 bits
-  per number and `log2(allowed symbols)` per symbol. A single themed word gives
+  per number and `log2(allowed symbols)` per symbol (fixed symbols add
+  nothing). A single themed word gives
   only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are
   meant to be easy to remember. Use more words, numbers or symbols, or the
   Password mode, where strength matters. The "every type present" rule lowers this slightly, mostly at

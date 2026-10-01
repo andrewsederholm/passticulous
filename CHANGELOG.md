@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pattern mode can use the same symbols every time, in the order you type them
+  (for example `#@!`), instead of random ones. Turn on "Use the same symbols
+  every time" in the UI, or pass `fixed_symbols` to `/api/generate`.
+
 ## [1.1.0] - 2026-10-01
 
 ### Added

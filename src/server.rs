@@ -148,6 +148,7 @@ struct GenerateQuery {
     digit_count: usize,
     symbol_count: usize,
     symbol_set: String,
+    fixed_symbols: Option<String>,
     order: String,
 }
 
@@ -174,6 +175,7 @@ impl Default for GenerateQuery {
             digit_count: pat.digits,
             symbol_count: pat.symbols,
             symbol_set: pat.symbol_set,
+            fixed_symbols: pat.fixed_symbols,
             order: "word,digits,symbols".to_string(),
         }
     }
@@ -250,6 +252,7 @@ impl Options {
                     digits: q.digit_count,
                     symbols: q.symbol_count,
                     symbol_set: q.symbol_set.clone(),
+                    fixed_symbols: q.fixed_symbols.clone(),
                     order,
                     separator: q.separator.clone().unwrap_or(defaults.separator),
                 })
@@ -447,6 +450,8 @@ mod tests {
             "/api/generate?mode=pattern&symbol_set=",
             "/api/generate?mode=pattern&symbol_set=%23a",
             "/api/generate?mode=pattern&digit_count=17",
+            "/api/generate?mode=pattern&fixed_symbols=",
+            "/api/generate?mode=pattern&fixed_symbols=%23a",
             "/api/generate?mode=pattern&words=6",
         ] {
             let (status, headers, body) = get(uri).await;
@@ -504,6 +509,21 @@ mod tests {
                 "{body}"
             );
             assert_eq!(*word, word.to_uppercase());
+        }
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_with_fixed_symbols() {
+        // fixed_symbols "#@!" is URL-encoded as %23%40%21.
+        let (status, _, body) =
+            get("/api/generate?mode=pattern&count=10&fixed_symbols=%23%40%21").await;
+        assert_eq!(status, StatusCode::OK);
+        let v = json(&body);
+        for pw in v["passwords"].as_array().unwrap() {
+            let pw = pw.as_str().unwrap();
+            assert!(pw.ends_with("#@!"), "{pw}");
+            let digits = &pw[pw.len() - 7..pw.len() - 3];
+            assert!(digits.chars().all(|c| c.is_ascii_digit()), "{pw}");
         }
     }
 }

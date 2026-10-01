@@ -175,6 +175,7 @@ pub enum GenerateError {
     SymbolCountOutOfRange,
     NoSymbolsSelected,
     InvalidSymbol(char),
+    FixedSymbolsOutOfRange,
     InvalidOrder,
 }
 
@@ -209,6 +210,12 @@ impl fmt::Display for GenerateError {
             }
             Self::NoSymbolsSelected => write!(f, "choose at least one symbol to use"),
             Self::InvalidSymbol(c) => write!(f, "'{c}' is not an allowed symbol"),
+            Self::FixedSymbolsOutOfRange => {
+                write!(
+                    f,
+                    "fixed symbols must be between 1 and {MAX_PATTERN_SYMBOLS} characters"
+                )
+            }
             Self::InvalidOrder => {
                 write!(f, "order must list word, digits and symbols once each")
             }
@@ -268,6 +275,9 @@ pub struct PatternOptions {
     pub symbols: usize,
     /// The symbols to choose from. Duplicates are ignored.
     pub symbol_set: String,
+    /// When set, this exact run of symbols is used every time instead of
+    /// random ones, and `symbols` and `symbol_set` are ignored.
+    pub fixed_symbols: Option<String>,
     pub order: [Part; 3],
     /// Placed between every word and section. Empty by default.
     pub separator: String,
@@ -282,6 +292,7 @@ impl Default for PatternOptions {
             digits: 4,
             symbols: 3,
             symbol_set: DEFAULT_PATTERN_SYMBOLS.to_string(),
+            fixed_symbols: None,
             order: [Part::Word, Part::Digits, Part::Symbols],
             separator: String::new(),
         }
@@ -400,7 +411,7 @@ pub fn generate_passphrase<R: RngCore + ?Sized>(
 
 /// Generates a pattern password: themed words, then a run of digits, then a
 /// run of symbols (in the configured order). Each word, digit and symbol is
-/// chosen independently and uniformly.
+/// chosen independently and uniformly, unless fixed symbols are given.
 pub fn generate_pattern<R: RngCore + ?Sized>(
     rng: &mut R,
     opts: &PatternOptions,
@@ -411,27 +422,43 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
     if opts.digits > MAX_PATTERN_DIGITS {
         return Err(GenerateError::DigitCountOutOfRange);
     }
-    if opts.symbols > MAX_PATTERN_SYMBOLS {
-        return Err(GenerateError::SymbolCountOutOfRange);
-    }
     if opts.separator.chars().count() > MAX_SEPARATOR_LEN {
         return Err(GenerateError::SeparatorTooLong);
     }
     if !is_permutation(&opts.order) {
         return Err(GenerateError::InvalidOrder);
     }
-    let mut symbol_set: Vec<char> = Vec::new();
-    for c in opts.symbol_set.chars() {
-        if !ALL_SYMBOLS.contains(c) {
-            return Err(GenerateError::InvalidSymbol(c));
+    // Fixed symbols are used verbatim (repeats allowed); otherwise symbols
+    // are drawn from the de-duplicated set.
+    let symbols = match &opts.fixed_symbols {
+        Some(fixed) => {
+            if !(1..=MAX_PATTERN_SYMBOLS).contains(&fixed.chars().count()) {
+                return Err(GenerateError::FixedSymbolsOutOfRange);
+            }
+            if let Some(c) = fixed.chars().find(|&c| !ALL_SYMBOLS.contains(c)) {
+                return Err(GenerateError::InvalidSymbol(c));
+            }
+            SymbolSource::Fixed(fixed)
         }
-        if !symbol_set.contains(&c) {
-            symbol_set.push(c);
+        None => {
+            if opts.symbols > MAX_PATTERN_SYMBOLS {
+                return Err(GenerateError::SymbolCountOutOfRange);
+            }
+            let mut set: Vec<char> = Vec::new();
+            for c in opts.symbol_set.chars() {
+                if !ALL_SYMBOLS.contains(c) {
+                    return Err(GenerateError::InvalidSymbol(c));
+                }
+                if !set.contains(&c) {
+                    set.push(c);
+                }
+            }
+            if opts.symbols > 0 && set.is_empty() {
+                return Err(GenerateError::NoSymbolsSelected);
+            }
+            SymbolSource::Random(set)
         }
-    }
-    if opts.symbols > 0 && symbol_set.is_empty() {
-        return Err(GenerateError::NoSymbolsSelected);
-    }
+    };
 
     let list = opts.category.words();
     let digits: Vec<char> = DIGITS.chars().collect();
@@ -446,25 +473,37 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
                     .map(|_| digits[uniform_index(rng, digits.len())])
                     .collect(),
             ),
-            Part::Symbols if opts.symbols > 0 => segments.push(
-                (0..opts.symbols)
-                    .map(|_| symbol_set[uniform_index(rng, symbol_set.len())])
-                    .collect(),
-            ),
-            Part::Digits | Part::Symbols => {}
+            Part::Symbols => match &symbols {
+                SymbolSource::Fixed(fixed) => segments.push(fixed.to_string()),
+                SymbolSource::Random(set) if opts.symbols > 0 => segments.push(
+                    (0..opts.symbols)
+                        .map(|_| set[uniform_index(rng, set.len())])
+                        .collect(),
+                ),
+                SymbolSource::Random(_) => {}
+            },
+            Part::Digits => {}
         }
     }
 
     let mut entropy_bits = opts.words as f64 * (list.len() as f64).log2()
         + opts.digits as f64 * (digits.len() as f64).log2();
-    if opts.symbols > 0 {
-        entropy_bits += opts.symbols as f64 * (symbol_set.len() as f64).log2();
+    // Fixed symbols are known to the attacker, so they add no entropy.
+    if let SymbolSource::Random(set) = &symbols
+        && opts.symbols > 0
+    {
+        entropy_bits += opts.symbols as f64 * (set.len() as f64).log2();
     }
 
     Ok(Generated {
         value: segments.join(&opts.separator),
         entropy_bits,
     })
+}
+
+enum SymbolSource<'a> {
+    Fixed(&'a str),
+    Random(Vec<char>),
 }
 
 fn capitalize(word: &str) -> String {
@@ -815,6 +854,7 @@ mod tests {
             digits: 3,
             symbols: 2,
             symbol_set: "##@".to_string(),
+            fixed_symbols: None,
             order: [Part::Symbols, Part::Word, Part::Digits],
             separator: ".".to_string(),
         };
@@ -835,6 +875,28 @@ mod tests {
             // Duplicate '#' is ignored: two symbols from a set of 2 = 2 bits.
             let colors = WordCategory::Colors.words().len() as f64;
             let expected = 2.0 * colors.log2() + 3.0 * 10f64.log2() + 2.0;
+            assert!((pp.entropy_bits - expected).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn pattern_uses_fixed_symbols_verbatim() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            symbols: 0,
+            symbol_set: String::new(),
+            fixed_symbols: Some("#@!!".to_string()),
+            order: [Part::Word, Part::Symbols, Part::Digits],
+            separator: "-".to_string(),
+            ..Default::default()
+        };
+        for _ in 0..50 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            let segments: Vec<&str> = pp.value.split('-').collect();
+            assert_eq!(segments.len(), 3, "{}", pp.value);
+            assert_eq!(segments[1], "#@!!", "{}", pp.value);
+            let animals = WordCategory::Animals.words().len() as f64;
+            let expected = animals.log2() + 4.0 * 10f64.log2();
             assert!((pp.entropy_bits - expected).abs() < 1e-9);
         }
     }
@@ -904,6 +966,27 @@ mod tests {
             (
                 PatternOptions {
                     symbol_set: "#a".to_string(),
+                    ..Default::default()
+                },
+                GenerateError::InvalidSymbol('a'),
+            ),
+            (
+                PatternOptions {
+                    fixed_symbols: Some(String::new()),
+                    ..Default::default()
+                },
+                GenerateError::FixedSymbolsOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    fixed_symbols: Some("#".repeat(MAX_PATTERN_SYMBOLS + 1)),
+                    ..Default::default()
+                },
+                GenerateError::FixedSymbolsOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    fixed_symbols: Some("#a!".to_string()),
                     ..Default::default()
                 },
                 GenerateError::InvalidSymbol('a'),

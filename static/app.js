@@ -120,11 +120,19 @@ function generatePattern(opts, wordlist) {
   if (!(opts.digits >= 0 && opts.digits <= MAX_PATTERN_DIGITS)) {
     throw new Error(`Numbers must be between 0 and ${MAX_PATTERN_DIGITS}.`);
   }
-  if (!(opts.symbols >= 0 && opts.symbols <= MAX_PATTERN_SYMBOLS)) {
+  // Fixed symbols are used verbatim (repeats allowed) instead of random ones.
+  const fixed = opts.fixed ? [...opts.fixedSymbols] : null;
+  if (fixed) {
+    if (fixed.length === 0 || fixed.length > MAX_PATTERN_SYMBOLS) {
+      throw new Error(`Type 1 to ${MAX_PATTERN_SYMBOLS} symbols to use every time.`);
+    }
+    const bad = fixed.find((c) => !ALL_SYMBOLS.includes(c));
+    if (bad !== undefined) throw new Error(`"${bad}" is not a symbol. Use punctuation like #@!`);
+  } else if (!(opts.symbols >= 0 && opts.symbols <= MAX_PATTERN_SYMBOLS)) {
     throw new Error(`Symbols must be between 0 and ${MAX_PATTERN_SYMBOLS}.`);
   }
   const symbolSet = [...new Set(opts.symbolSet)].filter((c) => ALL_SYMBOLS.includes(c));
-  if (opts.symbols > 0 && symbolSet.length === 0) {
+  if (!fixed && opts.symbols > 0 && symbolSet.length === 0) {
     throw new Error("Pick at least one allowed symbol, or set Symbols to 0.");
   }
   const applyCase = CASES[opts.case] ?? CASES.title;
@@ -135,13 +143,16 @@ function generatePattern(opts, wordlist) {
       for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(wordlist)));
     } else if (part === "digits" && opts.digits > 0) {
       segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
+    } else if (part === "symbols" && fixed) {
+      segments.push(fixed.join(""));
     } else if (part === "symbols" && opts.symbols > 0) {
       segments.push(Array.from({ length: opts.symbols }, () => pick(symbolSet)).join(""));
     }
   }
 
   let entropyBits = opts.words * Math.log2(wordlist.length) + opts.digits * Math.log2(10);
-  if (opts.symbols > 0) entropyBits += opts.symbols * Math.log2(symbolSet.length);
+  // Fixed symbols are known to an attacker, so they add no entropy.
+  if (!fixed && opts.symbols > 0) entropyBits += opts.symbols * Math.log2(symbolSet.length);
   return { value: segments.join(opts.separator), entropyBits };
 }
 
@@ -194,7 +205,12 @@ const el = {
   patternWordsValue: $("pattern-words-value"),
   patternDigits: $("pattern-digits"),
   patternDigitsValue: $("pattern-digits-value"),
+  patternFixed: $("pattern-fixed"),
+  patternFixedField: $("pattern-fixed-field"),
+  patternFixedSymbols: $("pattern-fixed-symbols"),
+  patternSymbolsField: $("pattern-symbols-field"),
   patternSymbols: $("pattern-symbols"),
+  symbolPicker: $("symbol-picker"),
   patternSymbolsValue: $("pattern-symbols-value"),
   symbolChips: $("symbol-chips"),
   symbolPicked: $("symbol-picked"),
@@ -260,6 +276,8 @@ function readOptions() {
       digits: intValue(el.patternDigits, 4, 0, MAX_PATTERN_DIGITS),
       symbols: intValue(el.patternSymbols, 3, 0, MAX_PATTERN_SYMBOLS),
       symbolSet: selectedSymbols(),
+      fixed: el.patternFixed.checked,
+      fixedSymbols: el.patternFixedSymbols.value,
       order: el.patternOrder.value,
       separator: el.patternSeparator.value,
     },
@@ -299,6 +317,10 @@ function restoreOptions() {
   if (Number.isInteger(p.digits)) el.patternDigits.value = clamp(p.digits, 0, MAX_PATTERN_DIGITS);
   if (Number.isInteger(p.symbols)) el.patternSymbols.value = clamp(p.symbols, 0, MAX_PATTERN_SYMBOLS);
   if (typeof p.symbolSet === "string") setSelectedSymbols(p.symbolSet);
+  if (typeof p.fixed === "boolean") el.patternFixed.checked = p.fixed;
+  if (typeof p.fixedSymbols === "string") {
+    el.patternFixedSymbols.value = [...p.fixedSymbols].slice(0, MAX_PATTERN_SYMBOLS).join("");
+  }
   if (ORDERS.includes(p.order)) el.patternOrder.value = p.order;
   if (typeof p.separator === "string") el.patternSeparator.value = p.separator.slice(0, MAX_SEPARATOR_LEN);
 }
@@ -356,6 +378,10 @@ function updateLabels(opts) {
   el.patternSymbolsValue.textContent = `(${p.symbols})`;
   const picked = new Set(p.symbolSet).size;
   el.symbolPicked.textContent = `(${picked} selected)`;
+  // Fixed symbols replace the random count and picker.
+  el.patternFixedField.hidden = !p.fixed;
+  el.patternSymbolsField.hidden = p.fixed;
+  el.symbolPicker.hidden = p.fixed;
 }
 
 async function generate() {
@@ -440,7 +466,7 @@ function init() {
     el.uppercase, el.lowercase, el.digits, el.symbols, el.excludeLookAlikes,
     el.words, el.separator, el.capitalize,
     el.patternCategory, el.patternCase, el.patternWords, el.patternDigits,
-    el.patternSymbols, el.patternOrder, el.patternSeparator,
+    el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
   ]) {
     input.addEventListener("input", generate);
   }
