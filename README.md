@@ -161,7 +161,7 @@ To run a specific release with Docker, check out its tag before building:
 
 ```sh
 git fetch --tags
-git checkout v1.0.0
+git checkout v1.1.0
 docker compose up -d --build
 ```
 
