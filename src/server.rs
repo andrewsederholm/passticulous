@@ -4,10 +4,13 @@
 //! requests at all; the only output is the startup and shutdown messages.
 
 use crate::config::Config;
-use crate::generator::{self, Generated, PassphraseOptions, PasswordOptions};
+use crate::generator::{
+    self, Generated, Part, PassphraseOptions, PasswordOptions, PatternOptions, WordCase,
+    WordCategory,
+};
 use axum::Router;
-use axum::extract::Query;
 use axum::extract::rejection::QueryRejection;
+use axum::extract::{Path, Query};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -57,6 +60,7 @@ pub fn app() -> Router {
             "/wordlist.txt",
             get(|| static_asset("text/plain; charset=utf-8", generator::WORDLIST_RAW)),
         )
+        .route("/wordlists/{file}", get(wordlist))
         .route("/healthz", get(healthz))
         .route("/api/generate", get(generate))
         .layer(middleware::from_fn(security_headers))
@@ -71,6 +75,14 @@ async fn static_asset(content_type: &'static str, body: &'static str) -> Respons
         body,
     )
         .into_response()
+}
+
+/// Serves a category word list, e.g. `/wordlists/animals.txt`.
+async fn wordlist(Path(file): Path<String>) -> Response {
+    match file.strip_suffix(".txt").and_then(WordCategory::from_name) {
+        Some(category) => static_asset("text/plain; charset=utf-8", category.raw()).await,
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn healthz() -> &'static str {
@@ -101,6 +113,7 @@ enum Mode {
     #[default]
     Password,
     Passphrase,
+    Pattern,
 }
 
 #[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -124,16 +137,25 @@ struct GenerateQuery {
     digits: bool,
     symbols: bool,
     exclude_look_alikes: bool,
+    // Passphrase and pattern options (defaults differ by mode)
+    words: Option<usize>,
+    separator: Option<String>,
     // Passphrase options
-    words: usize,
-    separator: String,
     capitalize: bool,
+    // Pattern options
+    category: String,
+    case: String,
+    digit_count: usize,
+    symbol_count: usize,
+    symbol_set: String,
+    order: String,
 }
 
 impl Default for GenerateQuery {
     fn default() -> Self {
         let pw = PasswordOptions::default();
         let pp = PassphraseOptions::default();
+        let pat = PatternOptions::default();
         Self {
             mode: Mode::default(),
             count: 1,
@@ -144,9 +166,15 @@ impl Default for GenerateQuery {
             digits: pw.digits,
             symbols: pw.symbols,
             exclude_look_alikes: pw.exclude_look_alikes,
-            words: pp.words,
-            separator: pp.separator,
+            words: None,
+            separator: None,
             capitalize: pp.capitalize,
+            category: pat.category.name().to_string(),
+            case: "title".to_string(),
+            digit_count: pat.digits,
+            symbol_count: pat.symbols,
+            symbol_set: pat.symbol_set,
+            order: "word,digits,symbols".to_string(),
         }
     }
 }
@@ -179,6 +207,57 @@ fn no_store(response: impl IntoResponse) -> Response {
     response
 }
 
+enum Options {
+    Password(PasswordOptions),
+    Passphrase(PassphraseOptions),
+    Pattern(PatternOptions),
+}
+
+impl Options {
+    fn from_query(mode: Mode, q: &GenerateQuery) -> Result<Self, String> {
+        Ok(match mode {
+            Mode::Password => Self::Password(PasswordOptions {
+                length: q.length,
+                uppercase: q.uppercase,
+                lowercase: q.lowercase,
+                digits: q.digits,
+                symbols: q.symbols,
+                exclude_look_alikes: q.exclude_look_alikes,
+            }),
+            Mode::Passphrase => {
+                let defaults = PassphraseOptions::default();
+                Self::Passphrase(PassphraseOptions {
+                    words: q.words.unwrap_or(defaults.words),
+                    separator: q.separator.clone().unwrap_or(defaults.separator),
+                    capitalize: q.capitalize,
+                })
+            }
+            Mode::Pattern => {
+                let defaults = PatternOptions::default();
+                let category = WordCategory::from_name(&q.category).ok_or_else(|| {
+                    let names: Vec<&str> = WordCategory::ALL.iter().map(|c| c.name()).collect();
+                    format!("category must be one of: {}", names.join(", "))
+                })?;
+                let case = WordCase::from_name(&q.case)
+                    .ok_or("case must be one of: title, lower, upper")?;
+                let order = Part::parse_order(&q.order).ok_or(
+                    "order must list word, digits and symbols once each, e.g. word,digits,symbols",
+                )?;
+                Self::Pattern(PatternOptions {
+                    category,
+                    words: q.words.unwrap_or(defaults.words),
+                    case,
+                    digits: q.digit_count,
+                    symbols: q.symbol_count,
+                    symbol_set: q.symbol_set.clone(),
+                    order,
+                    separator: q.separator.clone().unwrap_or(defaults.separator),
+                })
+            }
+        })
+    }
+}
+
 async fn generate(query: Result<Query<GenerateQuery>, QueryRejection>) -> Response {
     let Query(q) = match query {
         Ok(q) => q,
@@ -188,25 +267,17 @@ async fn generate(query: Result<Query<GenerateQuery>, QueryRejection>) -> Respon
         return error_response(format!("count must be between 1 and {MAX_COUNT}"));
     }
 
-    let password_opts = PasswordOptions {
-        length: q.length,
-        uppercase: q.uppercase,
-        lowercase: q.lowercase,
-        digits: q.digits,
-        symbols: q.symbols,
-        exclude_look_alikes: q.exclude_look_alikes,
-    };
-    let passphrase_opts = PassphraseOptions {
-        words: q.words,
-        separator: q.separator,
-        capitalize: q.capitalize,
+    let options = match Options::from_query(q.mode, &q) {
+        Ok(options) => options,
+        Err(message) => return error_response(message),
     };
 
     let mut rng = OsRng;
     let results: Result<Vec<Generated>, _> = (0..q.count)
-        .map(|_| match q.mode {
-            Mode::Password => generator::generate_password(&mut rng, &password_opts),
-            Mode::Passphrase => generator::generate_passphrase(&mut rng, &passphrase_opts),
+        .map(|_| match &options {
+            Options::Password(o) => generator::generate_password(&mut rng, o),
+            Options::Passphrase(o) => generator::generate_passphrase(&mut rng, o),
+            Options::Pattern(o) => generator::generate_pattern(&mut rng, o),
         })
         .collect();
     let results = match results {
@@ -292,9 +363,17 @@ mod tests {
             CONTENT_SECURITY_POLICY
         );
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
-        for path in ["/app.js", "/style.css", "/wordlist.txt"] {
+        for path in [
+            "/app.js",
+            "/style.css",
+            "/wordlist.txt",
+            "/wordlists/animals.txt",
+            "/wordlists/any.txt",
+        ] {
             assert_eq!(get(path).await.0, StatusCode::OK, "{path}");
         }
+        assert_eq!(get("/wordlists/nope.txt").await.0, StatusCode::NOT_FOUND);
+        assert_eq!(get("/wordlists/animals").await.0, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -362,11 +441,69 @@ mod tests {
             "/api/generate?mode=pin",
             "/api/generate?uppercase=false&lowercase=false&digits=false&symbols=false",
             "/api/generate?mode=passphrase&words=100",
+            "/api/generate?mode=pattern&category=dinosaurs",
+            "/api/generate?mode=pattern&case=sideways",
+            "/api/generate?mode=pattern&order=word,word,digits",
+            "/api/generate?mode=pattern&symbol_set=",
+            "/api/generate?mode=pattern&symbol_set=%23a",
+            "/api/generate?mode=pattern&digit_count=17",
+            "/api/generate?mode=pattern&words=6",
         ] {
             let (status, headers, body) = get(uri).await;
             assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
             assert_eq!(headers[header::CACHE_CONTROL], "no-store", "{uri}");
             assert!(json(&body)["error"].is_string(), "{uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_defaults() {
+        let (status, _, body) = get("/api/generate?mode=pattern&count=20").await;
+        assert_eq!(status, StatusCode::OK);
+        let v = json(&body);
+        assert_eq!(v["mode"], "pattern");
+        for pw in v["passwords"].as_array().unwrap() {
+            let pw = pw.as_str().unwrap();
+            let word: String = pw.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+            assert!(
+                WordCategory::Animals
+                    .words()
+                    .contains(&word.to_lowercase().as_str()),
+                "{pw}"
+            );
+            let rest = &pw[word.len()..];
+            assert!(rest[..4].chars().all(|c| c.is_ascii_digit()), "{pw}");
+            assert!(
+                rest[4..]
+                    .chars()
+                    .all(|c| generator::DEFAULT_PATTERN_SYMBOLS.contains(c)),
+                "{pw}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_with_options() {
+        // symbol_set "#@!" is URL-encoded as %23%40%21.
+        let (status, _, body) = get(
+            "/api/generate?mode=pattern&category=space&words=2&case=upper\
+             &digit_count=2&symbol_count=3&symbol_set=%23%40%21\
+             &order=symbols,digits,word&separator=_&format=text",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let segments: Vec<&str> = body.trim_end().split('_').collect();
+        assert_eq!(segments.len(), 4, "{body}");
+        assert!(segments[0].len() == 3 && segments[0].chars().all(|c| "#@!".contains(c)));
+        assert!(segments[1].len() == 2 && segments[1].chars().all(|c| c.is_ascii_digit()));
+        for word in &segments[2..] {
+            assert!(
+                WordCategory::Space
+                    .words()
+                    .contains(&word.to_lowercase().as_str()),
+                "{body}"
+            );
+            assert_eq!(*word, word.to_uppercase());
         }
     }
 }
