@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Passticulous</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M11 14v-3a5 5 0 0 1 10 0v3' fill='none' stroke='white' stroke-width='2.5'/%3E%3Crect x='8' y='14' width='16' height='11' rx='2' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Passticulous</h1>
+      <p class="tagline">Strong passwords and passphrases, generated in your browser.</p>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="Generator mode">
+      <button type="button" role="tab" id="tab-password" aria-controls="panel-password" aria-selected="true">Password</button>
+      <button type="button" role="tab" id="tab-passphrase" aria-controls="panel-passphrase" aria-selected="false" tabindex="-1">Passphrase</button>
+    </div>
+
+    <section class="output" aria-label="Generated result">
+      <output id="result" class="result" aria-live="polite" spellcheck="false"></output>
+      <div class="actions">
+        <button type="button" id="regenerate" class="secondary" title="Generate a new one (R)">Regenerate</button>
+        <button type="button" id="copy" class="primary" title="Copy to clipboard (C)">Copy</button>
+      </div>
+      <div class="strength">
+        <div class="meter" aria-hidden="true"><div id="meter-fill"></div></div>
+        <p id="strength-label" class="strength-label"></p>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+
+    <section id="panel-password" class="options" role="tabpanel" aria-labelledby="tab-password">
+      <div class="field">
+        <label for="length">Length <span id="length-value" class="value"></span></label>
+        <div class="range-row">
+          <input type="range" id="length" min="4" max="128" value="20">
+          <input type="number" id="length-number" min="4" max="256" value="20" aria-label="Length">
+        </div>
+      </div>
+      <fieldset>
+        <legend>Characters</legend>
+        <label class="check"><input type="checkbox" id="uppercase" checked> Uppercase <code>A–Z</code></label>
+        <label class="check"><input type="checkbox" id="lowercase" checked> Lowercase <code>a–z</code></label>
+        <label class="check"><input type="checkbox" id="digits" checked> Digits <code>0–9</code></label>
+        <label class="check"><input type="checkbox" id="symbols" checked> Symbols <code>!#$%&amp;…</code></label>
+        <label class="check"><input type="checkbox" id="exclude-look-alikes"> Exclude look-alikes <code>I l 1 | O 0 o</code></label>
+      </fieldset>
+    </section>
+
+    <section id="panel-passphrase" class="options" role="tabpanel" aria-labelledby="tab-passphrase" hidden>
+      <div class="field">
+        <label for="words">Words <span id="words-value" class="value"></span></label>
+        <input type="range" id="words" min="3" max="20" value="6">
+      </div>
+      <div class="field">
+        <label for="separator">Separator</label>
+        <input type="text" id="separator" value="-" maxlength="8" autocomplete="off" spellcheck="false">
+      </div>
+      <fieldset>
+        <legend>Style</legend>
+        <label class="check"><input type="checkbox" id="capitalize"> Capitalize words</label>
+      </fieldset>
+      <p class="hint">Words come from the <a href="https://www.eff.org/dice" rel="noopener noreferrer">EFF large wordlist</a> (7,776 words, ~12.9 bits each).</p>
+    </section>
+
+    <footer>
+      <p>Everything is generated locally with <code>crypto.getRandomValues</code>. Nothing you generate is sent to or stored on the server.</p>
+      <p>Scripting? <code>curl -s 'http://<span id="host">localhost</span>/api/generate?length=24&amp;format=text'</code></p>
+    </footer>
+  </main>
+</body>
+</html>
