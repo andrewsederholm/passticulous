@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- "Periodic elements" word type for patterns, with all 118 element names
+  (e.g. `Rhodium8754#@!`). Use `category=elements` in the API.
+
 ## [1.3.0] - 2026-10-01
 
 ### Added

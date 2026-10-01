@@ -49,6 +49,7 @@ pub enum WordCategory {
     Foods,
     Nature,
     Space,
+    Elements,
 }
 
 static CATEGORY_WORDS: LazyLock<Vec<Vec<&'static str>>> = LazyLock::new(|| {
@@ -59,13 +60,14 @@ static CATEGORY_WORDS: LazyLock<Vec<Vec<&'static str>>> = LazyLock::new(|| {
 });
 
 impl WordCategory {
-    pub const ALL: [WordCategory; 6] = [
+    pub const ALL: [WordCategory; 7] = [
         Self::Any,
         Self::Animals,
         Self::Colors,
         Self::Foods,
         Self::Nature,
         Self::Space,
+        Self::Elements,
     ];
 
     pub fn name(self) -> &'static str {
@@ -76,6 +78,7 @@ impl WordCategory {
             Self::Foods => "foods",
             Self::Nature => "nature",
             Self::Space => "space",
+            Self::Elements => "elements",
         }
     }
 
@@ -92,6 +95,7 @@ impl WordCategory {
             Self::Foods => include_str!("../assets/categories/foods.txt"),
             Self::Nature => include_str!("../assets/categories/nature.txt"),
             Self::Space => include_str!("../assets/categories/space.txt"),
+            Self::Elements => include_str!("../assets/categories/elements.txt"),
         }
     }
 
@@ -814,6 +818,8 @@ mod tests {
         }
         assert_eq!(WordCategory::Any.words().len(), 7776);
         assert!(WordCategory::Animals.words().contains(&"giraffe"));
+        assert_eq!(WordCategory::Elements.words().len(), 118);
+        assert!(WordCategory::Elements.words().contains(&"rhodium"));
         assert_eq!(WordCategory::from_name("dinosaurs"), None);
     }
 

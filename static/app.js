@@ -22,7 +22,7 @@ const MAX_PATTERN_WORDS = 5;
 const MAX_PATTERN_DIGITS = 16;
 const MAX_PATTERN_SYMBOLS = 16;
 const MAX_SEPARATOR_LEN = 8;
-const CATEGORIES = ["animals", "colors", "foods", "nature", "space", "any"];
+const CATEGORIES = ["animals", "colors", "foods", "nature", "space", "elements", "any"];
 const ORDERS = [
   "word,digits,symbols",
   "word,symbols,digits",

@@ -16,10 +16,11 @@ an optional HTTP API for scripts and `curl`.
   (7,776 words, ~12.9 bits each), with a custom separator and optional
   capitalization.
 - **Patterns**: memorable passwords like `Giraffe3287#@!`. Pick a word type
-  (animals, colors, foods, nature, space, or any EFF word), 1–5 words and their
-  case (Title, lower, UPPER), how many numbers (0–16) and symbols (0–16),
-  exactly which symbols are allowed (or the same fixed symbols, like `#@!`,
-  every time), the order of the three parts, and an optional separator.
+  (animals, colors, foods, nature, space, periodic elements, or any EFF word),
+  1–5 words and their case (Title, lower, UPPER), how many numbers (0–16) and
+  symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
+  like `#@!`, every time), the order of the three parts, and an optional
+  separator.
 - **Themes**: light, dark or follow the device, with every color adjustable.
   Set the default for your instance, and visitors can tweak it for themselves.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
@@ -219,7 +220,7 @@ bottom of the page. Their choices are saved only in their browser, and
 | `words`               | `6` / `1`  | passphrase / pattern | 3–20 / 1–5           |
 | `separator`           | `-` / none | passphrase / pattern | up to 8 characters   |
 | `capitalize`          | `false`    | passphrase |                                |
-| `category`            | `animals`  | pattern    | `animals`, `colors`, `foods`, `nature`, `space`, `any` |
+| `category`            | `animals`  | pattern    | `animals`, `colors`, `foods`, `nature`, `space`, `elements`, `any` |
 | `case`                | `title`    | pattern    | `title`, `lower` or `upper`    |
 | `digit_count`         | `4`        | pattern    | 0–16                           |
 | `symbol_count`        | `3`        | pattern    | 0–16                           |

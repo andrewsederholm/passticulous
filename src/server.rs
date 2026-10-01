@@ -443,6 +443,7 @@ mod tests {
             "/wordlist.txt",
             "/wordlists/animals.txt",
             "/wordlists/any.txt",
+            "/wordlists/elements.txt",
         ] {
             assert_eq!(get(path).await.0, StatusCode::OK, "{path}");
         }
