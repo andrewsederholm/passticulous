@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pattern mode for memorable passwords like `Giraffe3287#@!`: choose a word
+  category (animals, colors, foods, nature, space or any word), number of
+  words, word case, how many numbers and symbols, exactly which symbols are
+  allowed, the order of the parts, and a separator. Available in the UI and
+  via `/api/generate?mode=pattern`.
+- Themed word lists, served at `/wordlists/{category}.txt`.
+- The selected mode is kept in the URL (`/#pattern`) so it can be bookmarked.
+
 ## [1.0.0] - 2026-10-01
 
 First release.

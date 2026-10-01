@@ -12,9 +12,16 @@ an optional HTTP API for scripts and `curl`.
 - **Passphrases**: 3–20 words from the [EFF large wordlist](https://www.eff.org/dice)
   (7,776 words, ~12.9 bits each), with a custom separator and optional
   capitalization.
+- **Patterns**: memorable passwords like `Giraffe3287#@!`. Pick a word type
+  (animals, colors, foods, nature, space, or any EFF word), 1–5 words and their
+  case (Title, lower, UPPER), how many numbers (0–16) and symbols (0–16),
+  exactly which symbols are allowed, the order of the three parts, and an
+  optional separator.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
   generated values never leave your browser.
 - **Server API**: `GET /api/generate` for scripts, using the OS CSPRNG.
+- **Bookmarkable modes**: open `/#password`, `/#passphrase` or `/#pattern`
+  directly.
 - **Strength meter**: an entropy estimate for the current settings.
 - **One binary**: HTML, CSS, JS and the wordlist are embedded at compile time.
   No database, no state, no runtime files.
@@ -76,9 +83,15 @@ localhost (for example, behind a reverse proxy), change the port mapping in
 | `digits`              | `true`     | password   |                                |
 | `symbols`             | `true`     | password   |                                |
 | `exclude_look_alikes` | `false`    | password   | removes `I l 1 \| O 0 o`       |
-| `words`               | `6`        | passphrase | 3–20                           |
-| `separator`           | `-`        | passphrase | up to 8 characters             |
+| `words`               | `6` / `1`  | passphrase / pattern | 3–20 / 1–5           |
+| `separator`           | `-` / none | passphrase / pattern | up to 8 characters   |
 | `capitalize`          | `false`    | passphrase |                                |
+| `category`            | `animals`  | pattern    | `animals`, `colors`, `foods`, `nature`, `space`, `any` |
+| `case`                | `title`    | pattern    | `title`, `lower` or `upper`    |
+| `digit_count`         | `4`        | pattern    | 0–16                           |
+| `symbol_count`        | `3`        | pattern    | 0–16                           |
+| `symbol_set`          | `!@#$%&*?` | pattern    | any ASCII symbols; URL-encode it (`#` is `%23`) |
+| `order`               | `word,digits,symbols` | pattern | each part exactly once |
 
 ```sh
 $ curl -s 'http://localhost:8080/api/generate?length=24&count=2'
@@ -86,6 +99,9 @@ $ curl -s 'http://localhost:8080/api/generate?length=24&count=2'
 
 $ curl -s 'http://localhost:8080/api/generate?mode=passphrase&words=5&format=text'
 gravity-unsalted-overdue-shrank-comply
+
+$ curl -s 'http://localhost:8080/api/generate?mode=pattern&category=animals&digit_count=4&symbol_set=%23%40%21&format=text'
+Giraffe3287#@!
 ```
 
 Invalid parameters return `400` with `{"error": "..."}`.
@@ -120,7 +136,11 @@ runtime image has no shell or curl.
   read-only root filesystem, all capabilities dropped and `no-new-privileges`.
 - **Entropy figures** assume the attacker knows your settings. They are
   `length × log2(pool size)` for passwords and `words × log2(7776)` for
-  passphrases. The "every type present" rule lowers this slightly, mostly at
+  passphrases. Patterns add `log2` of the word list size per word, ~3.3 bits
+  per number and `log2(allowed symbols)` per symbol. A single themed word gives
+  only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are
+  meant to be easy to remember. Use more words, numbers or symbols, or the
+  Password mode, where strength matters. The "every type present" rule lowers this slightly, mostly at
   very short lengths.
 
 ## Development
