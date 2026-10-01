@@ -4,7 +4,7 @@ A self-hostable password and passphrase generator. One small, self-contained
 Rust binary serves a web UI that generates everything **in your browser**, plus
 an optional HTTP API for scripts and `curl`.
 
-> **WARNING!** 
+> [!WARNING]
 > This software was built using AI without manual security verification. It is provided "as is", without warranty of any kind. You host this project entirely at your own risk, and the author is not responsible for any security incidents, losses, or system compromises.
 
 ## Features
