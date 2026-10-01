@@ -1,0 +1,3 @@
+mod generator;
+
+fn main() {}
