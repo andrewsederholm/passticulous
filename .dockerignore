@@ -1,0 +1,12 @@
+# Only Cargo.toml, Cargo.lock, src/, static/ and assets/ are needed to build.
+target/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+.env
+*.md
+.DS_Store
+.idea/
+.vscode/
