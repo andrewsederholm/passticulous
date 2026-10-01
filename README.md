@@ -1,21 +1,20 @@
 # Passticulous
 
-(Password + Meticulous)
+(Password + Meticulous = Passticulous)
 
-[!NOTE]
-
-Hey there! First off: **I am NOT a developer.** I have zero coding background or formal dev experience—my actual day job is in IT and Automotive. This entire project was built using AI (specifically Claude in the terminal). 
-
-While I make enough to live comfortably, paying for AI API tokens for this project isn't a top financial priority. Because token costs add up fast, please keep in mind that updates might be slow—development moves at the pace of what I can reasonably spend.
-
-To put things in perspective: $20 worth of tokens got the project to where it is today (which is honestly way further than I expected for someone who doesn't code!), but that $20 probably should have gone into my gas tank instead.
-
-### Supporting Development
-**Please know that you DO NOT need to donate—it is 100% your choice, and I genuinely appreciate you using or checking out the project regardless.**
-
-If you do feel inclined to chip in, any support is hugely appreciated. 100% of any donations received will go directly toward purchasing tokens in the Claude console to keep development moving.
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/YOUR_USERNAME)
+>[!NOTE]
+>Hey there! First off: **I am NOT a developer.** I have zero coding background or formal dev experience, my actual day job is in IT and hobby is automotive. This entire project was built using AI (specifically Claude in the terminal). 
+>
+>While I make enough to live comfortably, paying for AI API tokens for this project isn't a top financial priority. Because token costs add up fast, please keep in mind that updates might be slow. Development moves at the pace of what I can reasonably spend.
+>
+>To put things in perspective: $20 worth of tokens got the project to where it is today (which is honestly way further than I expected!), but that $20 probably should have gone into my gas tank instead...
+>
+>### Supporting Development
+>**Please know that you DO NOT need to donate! It is 100% your choice, and I genuinely appreciate you just using or checking out the project regardless.**
+>
+>If you do feel inclined to chip in, any support is hugely appreciated. 100% of any donations received will go directly toward purchasing tokens in the Claude console to keep development moving.
+>
+>[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/YOUR_USERNAME)
 
 > [!WARNING]
 > This software was built using AI without manual security verification. It is provided "as is", without warranty of any kind. You host this project entirely at your own risk, and the author is not responsible for any security incidents, losses, or system compromises.
