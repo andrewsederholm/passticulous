@@ -2,19 +2,36 @@
 //
 // Mirrors src/generator.rs: randomness comes from crypto.getRandomValues and
 // indices are drawn with rejection sampling to avoid modulo bias. Generated
-// values never leave the browser; only the public wordlist is fetched.
+// values never leave the browser; only the public word lists are fetched.
 "use strict";
 
 const UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
 const DIGITS = "0123456789";
 const SYMBOLS = "!#$%&()*+,-./:;<=>?@[]^_{|}~";
+const ALL_SYMBOLS = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+const DEFAULT_PATTERN_SYMBOLS = "!@#$%&*?";
 const LOOK_ALIKES = "Il1|O0o";
 
 const MIN_LENGTH = 4;
 const MAX_LENGTH = 256;
 const MIN_WORDS = 3;
 const MAX_WORDS = 20;
+const MIN_PATTERN_WORDS = 1;
+const MAX_PATTERN_WORDS = 5;
+const MAX_PATTERN_DIGITS = 16;
+const MAX_PATTERN_SYMBOLS = 16;
+const MAX_SEPARATOR_LEN = 8;
+const CATEGORIES = ["animals", "colors", "foods", "nature", "space", "any"];
+const ORDERS = [
+  "word,digits,symbols",
+  "word,symbols,digits",
+  "digits,word,symbols",
+  "symbols,word,digits",
+  "digits,symbols,word",
+  "symbols,digits,word",
+];
+const MODES = ["password", "passphrase", "pattern"];
 const U32_MAX = 0xffffffff;
 const STORAGE_KEY = "passticulous:options";
 
@@ -43,6 +60,10 @@ function uniformIndex(n) {
   }
 }
 
+function pick(list) {
+  return list[uniformIndex(list.length)];
+}
+
 // ---------- generators ----------
 
 function generatePassword(opts) {
@@ -65,10 +86,14 @@ function generatePassword(opts) {
   // uniform over all passwords that contain every enabled class.
   let candidate;
   do {
-    candidate = Array.from({ length: opts.length }, () => pool[uniformIndex(pool.length)]);
+    candidate = Array.from({ length: opts.length }, () => pick(pool));
   } while (!classes.every((set) => candidate.some((c) => set.includes(c))));
 
   return { value: candidate.join(""), entropyBits: opts.length * Math.log2(pool.length) };
+}
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function generatePassphrase(opts, wordlist) {
@@ -76,33 +101,74 @@ function generatePassphrase(opts, wordlist) {
     throw new Error(`Words must be between ${MIN_WORDS} and ${MAX_WORDS}.`);
   }
   const words = Array.from({ length: opts.words }, () => {
-    const word = wordlist[uniformIndex(wordlist.length)];
-    return opts.capitalize ? word[0].toUpperCase() + word.slice(1) : word;
+    const word = pick(wordlist);
+    return opts.capitalize ? capitalize(word) : word;
   });
   return { value: words.join(opts.separator), entropyBits: opts.words * Math.log2(wordlist.length) };
 }
 
-let wordlistPromise = null;
-function loadWordlist() {
-  wordlistPromise ??= fetch("/wordlist.txt")
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.text();
-    })
-    .then((text) => text.split("\n").map((w) => w.trim()).filter(Boolean))
-    .catch((err) => {
-      wordlistPromise = null;
-      throw new Error(`Could not load the wordlist (${err.message}).`);
-    });
-  return wordlistPromise;
+const CASES = {
+  title: capitalize,
+  lower: (w) => w.toLowerCase(),
+  upper: (w) => w.toUpperCase(),
+};
+
+function generatePattern(opts, wordlist) {
+  if (!(opts.words >= MIN_PATTERN_WORDS && opts.words <= MAX_PATTERN_WORDS)) {
+    throw new Error(`Words must be between ${MIN_PATTERN_WORDS} and ${MAX_PATTERN_WORDS}.`);
+  }
+  if (!(opts.digits >= 0 && opts.digits <= MAX_PATTERN_DIGITS)) {
+    throw new Error(`Numbers must be between 0 and ${MAX_PATTERN_DIGITS}.`);
+  }
+  if (!(opts.symbols >= 0 && opts.symbols <= MAX_PATTERN_SYMBOLS)) {
+    throw new Error(`Symbols must be between 0 and ${MAX_PATTERN_SYMBOLS}.`);
+  }
+  const symbolSet = [...new Set(opts.symbolSet)].filter((c) => ALL_SYMBOLS.includes(c));
+  if (opts.symbols > 0 && symbolSet.length === 0) {
+    throw new Error("Pick at least one allowed symbol, or set Symbols to 0.");
+  }
+  const applyCase = CASES[opts.case] ?? CASES.title;
+
+  const segments = [];
+  for (const part of opts.order.split(",")) {
+    if (part === "word") {
+      for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(wordlist)));
+    } else if (part === "digits" && opts.digits > 0) {
+      segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
+    } else if (part === "symbols" && opts.symbols > 0) {
+      segments.push(Array.from({ length: opts.symbols }, () => pick(symbolSet)).join(""));
+    }
+  }
+
+  let entropyBits = opts.words * Math.log2(wordlist.length) + opts.digits * Math.log2(10);
+  if (opts.symbols > 0) entropyBits += opts.symbols * Math.log2(symbolSet.length);
+  return { value: segments.join(opts.separator), entropyBits };
+}
+
+const wordlists = new Map();
+function loadWordlist(category) {
+  if (!wordlists.has(category)) {
+    const promise = fetch(`/wordlists/${category}.txt`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((text) => text.split("\n").map((w) => w.trim()).filter(Boolean))
+      .catch((err) => {
+        wordlists.delete(category);
+        throw new Error(`Could not load the word list (${err.message}).`);
+      });
+    wordlists.set(category, promise);
+  }
+  return wordlists.get(category);
 }
 
 // ---------- UI ----------
 
 const $ = (id) => document.getElementById(id);
 const el = {
-  tabs: { password: $("tab-password"), passphrase: $("tab-passphrase") },
-  panels: { password: $("panel-password"), passphrase: $("panel-passphrase") },
+  tabs: Object.fromEntries(MODES.map((m) => [m, $(`tab-${m}`)])),
+  panels: Object.fromEntries(MODES.map((m) => [m, $(`panel-${m}`)])),
   result: $("result"),
   copy: $("copy"),
   regenerate: $("regenerate"),
@@ -121,28 +187,83 @@ const el = {
   wordsValue: $("words-value"),
   separator: $("separator"),
   capitalize: $("capitalize"),
+  patternCategory: $("pattern-category"),
+  patternCategorySize: $("pattern-category-size"),
+  patternCase: $("pattern-case"),
+  patternWords: $("pattern-words"),
+  patternWordsValue: $("pattern-words-value"),
+  patternDigits: $("pattern-digits"),
+  patternDigitsValue: $("pattern-digits-value"),
+  patternSymbols: $("pattern-symbols"),
+  patternSymbolsValue: $("pattern-symbols-value"),
+  symbolChips: $("symbol-chips"),
+  symbolPicked: $("symbol-picked"),
+  patternOrder: $("pattern-order"),
+  patternSeparator: $("pattern-separator"),
 };
 
 let mode = "password";
 let generation = 0;
 
+function clamp(n, lo, hi) {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function intValue(input, fallback, lo, hi) {
+  const n = parseInt(input.value, 10);
+  return clamp(Number.isNaN(n) ? fallback : n, lo, hi);
+}
+
+function selectedSymbols() {
+  return [...el.symbolChips.querySelectorAll("input:checked")].map((i) => i.value).join("");
+}
+
+function setSelectedSymbols(set) {
+  for (const input of el.symbolChips.querySelectorAll("input")) {
+    input.checked = set.includes(input.value);
+  }
+}
+
+function buildSymbolChips() {
+  for (const symbol of ALL_SYMBOLS) {
+    const label = document.createElement("label");
+    label.className = "chip";
+    label.title = `Allow ${symbol}`;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = symbol;
+    input.setAttribute("aria-label", `Allow ${symbol}`);
+    const span = document.createElement("span");
+    span.textContent = symbol;
+    label.append(input, span);
+    el.symbolChips.append(label);
+  }
+  setSelectedSymbols(DEFAULT_PATTERN_SYMBOLS);
+}
+
 function readOptions() {
   return {
     mode,
-    length: clamp(parseInt(el.lengthNumber.value, 10) || 20, MIN_LENGTH, MAX_LENGTH),
+    length: intValue(el.lengthNumber, 20, MIN_LENGTH, MAX_LENGTH),
     uppercase: el.uppercase.checked,
     lowercase: el.lowercase.checked,
     digits: el.digits.checked,
     symbols: el.symbols.checked,
     excludeLookAlikes: el.excludeLookAlikes.checked,
-    words: clamp(parseInt(el.words.value, 10) || 6, MIN_WORDS, MAX_WORDS),
+    words: intValue(el.words, 6, MIN_WORDS, MAX_WORDS),
     separator: el.separator.value,
     capitalize: el.capitalize.checked,
+    pattern: {
+      category: el.patternCategory.value,
+      case: el.patternCase.value,
+      words: intValue(el.patternWords, 1, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS),
+      digits: intValue(el.patternDigits, 4, 0, MAX_PATTERN_DIGITS),
+      symbols: intValue(el.patternSymbols, 3, 0, MAX_PATTERN_SYMBOLS),
+      symbolSet: selectedSymbols(),
+      order: el.patternOrder.value,
+      separator: el.patternSeparator.value,
+    },
   };
-}
-
-function clamp(n, lo, hi) {
-  return Math.min(hi, Math.max(lo, n));
 }
 
 // Only options are persisted, never generated values.
@@ -167,8 +288,19 @@ function restoreOptions() {
     if (typeof saved[key] === "boolean") el[key].checked = saved[key];
   }
   if (Number.isInteger(saved.words)) el.words.value = clamp(saved.words, MIN_WORDS, MAX_WORDS);
-  if (typeof saved.separator === "string") el.separator.value = saved.separator.slice(0, 8);
-  if (saved.mode === "passphrase") mode = "passphrase";
+  if (typeof saved.separator === "string") el.separator.value = saved.separator.slice(0, MAX_SEPARATOR_LEN);
+  if (MODES.includes(saved.mode)) mode = saved.mode;
+
+  const p = saved.pattern;
+  if (!p || typeof p !== "object") return;
+  if (CATEGORIES.includes(p.category)) el.patternCategory.value = p.category;
+  if (p.case in CASES) el.patternCase.value = p.case;
+  if (Number.isInteger(p.words)) el.patternWords.value = clamp(p.words, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS);
+  if (Number.isInteger(p.digits)) el.patternDigits.value = clamp(p.digits, 0, MAX_PATTERN_DIGITS);
+  if (Number.isInteger(p.symbols)) el.patternSymbols.value = clamp(p.symbols, 0, MAX_PATTERN_SYMBOLS);
+  if (typeof p.symbolSet === "string") setSelectedSymbols(p.symbolSet);
+  if (ORDERS.includes(p.order)) el.patternOrder.value = p.order;
+  if (typeof p.separator === "string") el.patternSeparator.value = p.separator.slice(0, MAX_SEPARATOR_LEN);
 }
 
 function setLength(n) {
@@ -179,10 +311,12 @@ function setLength(n) {
 
 function setMode(next) {
   mode = next;
-  for (const [name, tab] of Object.entries(el.tabs)) {
+  // Keep the mode in the URL (e.g. /#pattern) so it can be bookmarked.
+  if (location.hash !== `#${mode}`) history.replaceState(null, "", `#${mode}`);
+  for (const name of MODES) {
     const selected = name === mode;
-    tab.setAttribute("aria-selected", String(selected));
-    tab.tabIndex = selected ? 0 : -1;
+    el.tabs[name].setAttribute("aria-selected", String(selected));
+    el.tabs[name].tabIndex = selected ? 0 : -1;
     el.panels[name].hidden = !selected;
   }
 }
@@ -213,17 +347,35 @@ function showResult({ value, entropyBits }) {
   el.strengthLabel.textContent = `${s.label} · ~${Math.round(entropyBits)} bits of entropy`;
 }
 
-async function generate() {
-  const opts = readOptions();
+function updateLabels(opts) {
+  const p = opts.pattern;
   el.lengthValue.textContent = `(${opts.length})`;
   el.wordsValue.textContent = `(${opts.words})`;
+  el.patternWordsValue.textContent = `(${p.words})`;
+  el.patternDigitsValue.textContent = `(${p.digits})`;
+  el.patternSymbolsValue.textContent = `(${p.symbols})`;
+  const picked = new Set(p.symbolSet).size;
+  el.symbolPicked.textContent = `(${picked} selected)`;
+}
+
+async function generate() {
+  const opts = readOptions();
+  updateLabels(opts);
   saveOptions(opts);
   const id = ++generation;
   try {
-    const result =
-      opts.mode === "password"
-        ? generatePassword(opts)
-        : generatePassphrase(opts, await loadWordlist());
+    let result;
+    if (opts.mode === "password") {
+      result = generatePassword(opts);
+    } else if (opts.mode === "passphrase") {
+      result = generatePassphrase(opts, await loadWordlist("any"));
+    } else {
+      const list = await loadWordlist(opts.pattern.category);
+      if (id === generation) {
+        el.patternCategorySize.textContent = `${list.length.toLocaleString()} words to choose from`;
+      }
+      result = generatePattern(opts.pattern, list);
+    }
     if (id === generation) showResult(result);
   } catch (err) {
     if (id === generation) showError(err.message);
@@ -254,24 +406,27 @@ function flash(button, text) {
 }
 
 function init() {
+  buildSymbolChips();
   restoreOptions();
-  setMode(mode);
+  const fromHash = location.hash.slice(1);
+  setMode(MODES.includes(fromHash) ? fromHash : mode);
   $("host").textContent = location.host || "localhost:8080";
 
-  for (const [name, tab] of Object.entries(el.tabs)) {
+  MODES.forEach((name, index) => {
+    const tab = el.tabs[name];
     tab.addEventListener("click", () => {
       setMode(name);
       generate();
     });
     tab.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        const other = name === "password" ? "passphrase" : "password";
-        setMode(other);
-        el.tabs[other].focus();
-        generate();
-      }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const step = e.key === "ArrowRight" ? 1 : -1;
+      const next = MODES[(index + step + MODES.length) % MODES.length];
+      setMode(next);
+      el.tabs[next].focus();
+      generate();
     });
-  }
+  });
 
   el.length.addEventListener("input", () => {
     el.lengthNumber.value = el.length.value;
@@ -281,14 +436,29 @@ function init() {
     setLength(parseInt(el.lengthNumber.value, 10) || 20);
     generate();
   });
-  for (const input of [el.uppercase, el.lowercase, el.digits, el.symbols, el.excludeLookAlikes, el.words, el.separator, el.capitalize]) {
+  for (const input of [
+    el.uppercase, el.lowercase, el.digits, el.symbols, el.excludeLookAlikes,
+    el.words, el.separator, el.capitalize,
+    el.patternCategory, el.patternCase, el.patternWords, el.patternDigits,
+    el.patternSymbols, el.patternOrder, el.patternSeparator,
+  ]) {
     input.addEventListener("input", generate);
+  }
+  el.symbolChips.addEventListener("change", generate);
+  for (const button of document.querySelectorAll("[data-symbols]")) {
+    button.addEventListener("click", () => {
+      const preset = button.dataset.symbols;
+      setSelectedSymbols(preset === "all" ? ALL_SYMBOLS : preset === "none" ? "" : DEFAULT_PATTERN_SYMBOLS);
+      generate();
+    });
   }
 
   el.regenerate.addEventListener("click", generate);
   el.copy.addEventListener("click", copyResult);
   document.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "r" || e.key === "R") generate();
     if (e.key === "c" || e.key === "C") copyResult();
   });

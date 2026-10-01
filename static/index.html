@@ -19,6 +19,7 @@
     <div class="tabs" role="tablist" aria-label="Generator mode">
       <button type="button" role="tab" id="tab-password" aria-controls="panel-password" aria-selected="true">Password</button>
       <button type="button" role="tab" id="tab-passphrase" aria-controls="panel-passphrase" aria-selected="false" tabindex="-1">Passphrase</button>
+      <button type="button" role="tab" id="tab-pattern" aria-controls="panel-pattern" aria-selected="false" tabindex="-1">Pattern</button>
     </div>
 
     <section class="output" aria-label="Generated result">
@@ -66,6 +67,71 @@
         <label class="check"><input type="checkbox" id="capitalize"> Capitalize words</label>
       </fieldset>
       <p class="hint">Words come from the <a href="https://www.eff.org/dice" rel="noopener noreferrer">EFF large wordlist</a> (7,776 words, ~12.9 bits each).</p>
+    </section>
+
+    <section id="panel-pattern" class="options" role="tabpanel" aria-labelledby="tab-pattern" hidden>
+      <p class="hint top">Build a password like <code>Giraffe3287#@!</code>: a themed word, then numbers, then symbols.</p>
+      <div class="field-grid">
+        <div class="field">
+          <label for="pattern-category">Word type</label>
+          <select id="pattern-category">
+            <option value="animals">Animals</option>
+            <option value="colors">Colors</option>
+            <option value="foods">Foods</option>
+            <option value="nature">Nature</option>
+            <option value="space">Space</option>
+            <option value="any">Any word</option>
+          </select>
+          <p id="pattern-category-size" class="hint small"></p>
+        </div>
+        <div class="field">
+          <label for="pattern-case">Word style</label>
+          <select id="pattern-case">
+            <option value="title">Title (Giraffe)</option>
+            <option value="lower">lower (giraffe)</option>
+            <option value="upper">UPPER (GIRAFFE)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="pattern-words">Words <span id="pattern-words-value" class="value"></span></label>
+        <input type="range" id="pattern-words" min="1" max="5" value="1">
+      </div>
+      <div class="field">
+        <label for="pattern-digits">Numbers <span id="pattern-digits-value" class="value"></span></label>
+        <input type="range" id="pattern-digits" min="0" max="16" value="4">
+      </div>
+      <div class="field">
+        <label for="pattern-symbols">Symbols <span id="pattern-symbols-value" class="value"></span></label>
+        <input type="range" id="pattern-symbols" min="0" max="16" value="3">
+      </div>
+      <fieldset class="symbol-picker">
+        <legend>Allowed symbols <span id="symbol-picked" class="value"></span></legend>
+        <div id="symbol-chips" class="chips"></div>
+        <div class="chip-actions">
+          <button type="button" class="link" data-symbols="all">Select all</button>
+          <button type="button" class="link" data-symbols="none">Clear</button>
+          <button type="button" class="link" data-symbols="default">Reset</button>
+        </div>
+      </fieldset>
+      <div class="field-grid">
+        <div class="field">
+          <label for="pattern-order">Order</label>
+          <select id="pattern-order">
+            <option value="word,digits,symbols">Word → Numbers → Symbols</option>
+            <option value="word,symbols,digits">Word → Symbols → Numbers</option>
+            <option value="digits,word,symbols">Numbers → Word → Symbols</option>
+            <option value="symbols,word,digits">Symbols → Word → Numbers</option>
+            <option value="digits,symbols,word">Numbers → Symbols → Word</option>
+            <option value="symbols,digits,word">Symbols → Numbers → Word</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pattern-separator">Separator</label>
+          <input type="text" id="pattern-separator" value="" maxlength="8" placeholder="none" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <p class="hint">Patterns are easy to remember but weaker than a fully random password. Check the strength meter, and add numbers, symbols or words to make it stronger.</p>
     </section>
 
     <footer>
