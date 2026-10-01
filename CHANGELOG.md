@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-01
+
 ### Added
 
 - Pattern mode can use the same symbols every time, in the order you type them
@@ -45,6 +47,7 @@ First release.
 - Multi-stage Dockerfile (distroless, non-root) and a `docker-compose.yml`
   with a configurable port, restart policy and healthcheck.
 
-[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/andrewsederholm/passticulous/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/andrewsederholm/passticulous/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/andrewsederholm/passticulous/releases/tag/v1.0.0
