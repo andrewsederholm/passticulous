@@ -5,7 +5,7 @@ services:
     container_name: passticulous
     restart: unless-stopped
     ports:
-      # Host port is configurable: PASSTICULOUS_PORT=9000 docker compose up -d
+      # Host port is configurable: put PASSTICULOUS_PORT=9000 in a .env file
       - "${PASSTICULOUS_PORT:-8080}:8080"
     environment:
       PORT: "8080"

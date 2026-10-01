@@ -38,11 +38,15 @@ docker compose up -d
 
 Then open <http://localhost:8080>.
 
-To use a different host port:
+To use a different host port, set it in a `.env` file so it survives
+upgrades:
 
 ```sh
-PASSTICULOUS_PORT=9000 docker compose up -d
+echo "PASSTICULOUS_PORT=9000" > .env
+docker compose up -d
 ```
+
+To update later, see [Upgrading](#upgrading).
 
 ### Without Docker
 
@@ -54,6 +58,96 @@ cargo run --release
 cargo build --release && ./target/release/passticulous
 ```
 
+## Upgrading
+
+Passticulous stores nothing on the server, so there is no data to back up or
+migrate. Your UI settings live in your browser and carry over automatically.
+
+Before upgrading, skim the [release notes](https://github.com/andrewsederholm/passticulous/releases)
+or [CHANGELOG.md](CHANGELOG.md). A new **major** version (e.g. 1.x → 2.0.0)
+may need changes to your setup, and its notes will say what to do.
+
+### Docker (latest version)
+
+From the folder you cloned:
+
+```sh
+git pull
+docker compose up -d --build
+```
+
+`--build` matters: without it, Compose keeps running the old image. The
+container is replaced with the new version in a few seconds.
+
+Check that it worked:
+
+```sh
+docker compose ps        # STATUS should show "(healthy)" after a few seconds
+docker compose exec passticulous /usr/local/bin/passticulous --version
+```
+
+Old images are kept by Docker after each rebuild. To free the space:
+
+```sh
+docker image prune
+```
+
+### Docker (a specific version)
+
+To install or stay on a particular release instead of the latest:
+
+```sh
+git fetch --tags
+git checkout v1.1.0
+docker compose up -d --build
+```
+
+Git will say you are in a "detached HEAD" state. That is normal when checking
+out a release tag. To go back to following the latest version:
+
+```sh
+git checkout main
+git pull
+docker compose up -d --build
+```
+
+### Rolling back
+
+If a new version causes a problem, check out the previous release and rebuild:
+
+```sh
+git checkout v1.0.0
+docker compose up -d --build
+```
+
+### Keep local settings out of the way of updates
+
+If you change the port, put it in a `.env` file next to `docker-compose.yml`
+rather than editing the compose file:
+
+```sh
+echo "PASSTICULOUS_PORT=9000" > .env
+```
+
+Compose reads `.env` automatically and Git ignores it, so `git pull` never
+conflicts with your settings. If you have already edited `docker-compose.yml`
+and `git pull` refuses to run, save your changes with `git stash`, pull, then
+`git stash pop` to reapply them.
+
+### Without Docker
+
+```sh
+git pull
+cargo build --release
+```
+
+Then restart `./target/release/passticulous`.
+
+### Getting notified of new releases
+
+On the GitHub repository page, click **Watch → Custom → Releases** to get an
+email when a new version is published.
+
 ## Configuration
 
 The server reads these environment variables:
@@ -63,10 +157,13 @@ The server reads these environment variables:
 | `PORT`      | `8080`    | TCP port to listen on.                              |
 | `BIND_ADDR` | `0.0.0.0` | IP address to bind, e.g. `127.0.0.1` or `::`.       |
 
-With Docker Compose, set `PASSTICULOUS_PORT` to change the **host** port. The
-container always listens on 8080 internally. To expose the app only on
-localhost (for example, behind a reverse proxy), change the port mapping in
-`docker-compose.yml` to `"127.0.0.1:${PASSTICULOUS_PORT:-8080}:8080"`.
+With Docker Compose, set `PASSTICULOUS_PORT` in a `.env` file to change the
+**host** port. The container always listens on 8080 internally. To expose the
+app only on localhost (for example, behind a reverse proxy), change the port
+mapping in `docker-compose.yml` to `"127.0.0.1:${PASSTICULOUS_PORT:-8080}:8080"`.
+This is a local edit to a tracked file, so see
+[Upgrading](#keep-local-settings-out-of-the-way-of-updates) for how to pull
+updates afterwards.
 
 ## API
 
@@ -155,15 +252,12 @@ cargo fmt
 
 Passticulous follows [Semantic Versioning](https://semver.org/). Releases are
 tagged `vX.Y.Z` and every change is recorded in [CHANGELOG.md](CHANGELOG.md).
-Run `passticulous --version` to see which version you have.
+Run `passticulous --version` to see which version you have. See
+[Upgrading](#upgrading) for how to update or pin a version.
 
-To run a specific release with Docker, check out its tag before building:
-
-```sh
-git fetch --tags
-git checkout v1.1.0
-docker compose up -d --build
-```
+- **Patch** (1.1.0 → 1.1.1): bug fixes only.
+- **Minor** (1.1.0 → 1.2.0): new features; existing behavior is unchanged.
+- **Major** (1.x → 2.0.0): breaking changes; read the release notes first.
 
 ## License
 
