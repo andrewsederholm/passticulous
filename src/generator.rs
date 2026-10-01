@@ -49,7 +49,10 @@ impl fmt::Display for GenerateError {
                 write!(f, "words must be between {MIN_WORDS} and {MAX_WORDS}")
             }
             Self::SeparatorTooLong => {
-                write!(f, "separator must be at most {MAX_SEPARATOR_LEN} characters")
+                write!(
+                    f,
+                    "separator must be at most {MAX_SEPARATOR_LEN} characters"
+                )
             }
         }
     }
@@ -277,14 +280,20 @@ mod tests {
             .map(|&c| (c as f64 - expected).powi(2) / expected)
             .sum();
         // 9 degrees of freedom; 27.88 is the p = 0.001 critical value.
-        assert!(chi_squared < 27.88, "chi-squared {chi_squared} too high: {counts:?}");
+        assert!(
+            chi_squared < 27.88,
+            "chi-squared {chi_squared} too high: {counts:?}"
+        );
     }
 
     #[test]
     fn password_has_requested_length() {
         let mut rng = rng();
         for length in [MIN_LENGTH, 12, 64, MAX_LENGTH] {
-            let opts = PasswordOptions { length, ..Default::default() };
+            let opts = PasswordOptions {
+                length,
+                ..Default::default()
+            };
             let pw = generate_password(&mut rng, &opts).unwrap();
             assert_eq!(pw.value.chars().count(), length);
         }
@@ -293,7 +302,10 @@ mod tests {
     #[test]
     fn password_contains_every_enabled_class() {
         let mut rng = rng();
-        let opts = PasswordOptions { length: MIN_LENGTH, ..Default::default() };
+        let opts = PasswordOptions {
+            length: MIN_LENGTH,
+            ..Default::default()
+        };
         for _ in 0..500 {
             let pw = generate_password(&mut rng, &opts).unwrap().value;
             assert!(pw.chars().any(|c| UPPERCASE.contains(c)), "{pw}");
@@ -347,7 +359,10 @@ mod tests {
             GenerateError::NoCharacterClasses
         );
         for length in [0, MIN_LENGTH - 1, MAX_LENGTH + 1] {
-            let opts = PasswordOptions { length, ..Default::default() };
+            let opts = PasswordOptions {
+                length,
+                ..Default::default()
+            };
             assert_eq!(
                 generate_password(&mut rng, &opts).unwrap_err(),
                 GenerateError::LengthOutOfRange
@@ -385,7 +400,11 @@ mod tests {
         assert_eq!(WORDLIST.len(), 7776);
         let unique: HashSet<_> = WORDLIST.iter().collect();
         assert_eq!(unique.len(), 7776);
-        assert!(WORDLIST.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '-')));
+        assert!(
+            WORDLIST
+                .iter()
+                .all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
+        );
     }
 
     #[test]
@@ -427,14 +446,20 @@ mod tests {
             capitalize: true,
         };
         let pp = generate_passphrase(&mut rng, &opts).unwrap().value;
-        assert_eq!(pp.chars().filter(|c| c.is_ascii_uppercase()).count(), MIN_WORDS);
+        assert_eq!(
+            pp.chars().filter(|c| c.is_ascii_uppercase()).count(),
+            MIN_WORDS
+        );
     }
 
     #[test]
     fn passphrase_rejects_invalid_options() {
         let mut rng = rng();
         for words in [0, MIN_WORDS - 1, MAX_WORDS + 1] {
-            let opts = PassphraseOptions { words, ..Default::default() };
+            let opts = PassphraseOptions {
+                words,
+                ..Default::default()
+            };
             assert_eq!(
                 generate_passphrase(&mut rng, &opts).unwrap_err(),
                 GenerateError::WordCountOutOfRange
