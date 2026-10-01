@@ -14,7 +14,7 @@
 >
 >If you do feel inclined to chip in, any support is hugely appreciated. 100% of any donations received will go directly toward purchasing tokens in the Claude console to keep development moving.
 >
->[![Buy Me A Token](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/YOUR_USERNAME)
+>☕ **[Buy Me A ~~Coffee~~ Token](https://www.buymeacoffee.com/YOUR_USERNAME)**
 
 > [!WARNING]
 > This software was built using AI without manual security verification. It is provided "as is", without warranty of any kind. You host this project entirely at your own risk, and the author is not responsible for any security incidents, losses, or system compromises.
