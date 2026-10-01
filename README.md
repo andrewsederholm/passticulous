@@ -19,6 +19,8 @@
 > [!WARNING]
 > This software was built using AI without manual security verification. It is provided "as is", without warranty of any kind. You host this project entirely at your own risk, and the author is not responsible for any security incidents, losses, or system compromises.
 
+## What is Passticulous?
+
 ## Features
 
 - **Passwords**: length 4–256, uppercase, lowercase, digits, symbols, and an
