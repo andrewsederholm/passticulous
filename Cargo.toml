@@ -1,0 +1,20 @@
+[package]
+name = "passticulous"
+version = "0.1.0"
+edition = "2024"
+description = "A self-hostable password and passphrase generator"
+license = "Apache-2.0"
+readme = "README.md"
+publish = false
+
+[dependencies]
+axum = "0.8.9"
+rand = "0.8"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
