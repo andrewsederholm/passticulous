@@ -32,9 +32,11 @@ an optional HTTP API for scripts and `curl`.
   image, Compose file with a healthcheck.
 
 ## Screenshots
-<img width="750" height="839" alt="image" src="https://github.com/user-attachments/assets/83447241-2f8c-4405-83c5-4735591fb0eb" />
-<img width="735" height="842" alt="image" src="https://github.com/user-attachments/assets/68418ee1-81f9-4c9d-b47a-9734f1110a8a" />
-<img width="706" height="890" alt="image" src="https://github.com/user-attachments/assets/9a7324c7-7b70-46b0-936d-5cc43ca83be5" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/83447241-2f8c-4405-83c5-4735591fb0eb" width="30%" alt="image" />
+  <img src="https://github.com/user-attachments/assets/68418ee1-81f9-4c9d-b47a-9734f1110a8a" width="30%" alt="image" />
+  <img src="https://github.com/user-attachments/assets/9a7324c7-7b70-46b0-936d-5cc43ca83be5" width="30%" alt="image" />
+</p>
 
 
 
