@@ -1,6 +1,7 @@
 # Passticulous
 
 (Password + Meticulous)
+
 A self-hostable password and passphrase generator. One small, self-contained
 Rust binary serves a web UI that generates everything **in your browser**, plus
 an optional HTTP API for scripts and `curl`.
