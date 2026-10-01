@@ -1,22 +1,28 @@
-:root {
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --border: #dfe2ec;
-  --text: #1c1f2a;
-  --muted: #5f6578;
-  --accent: #4f46e5;
-  --accent-text: #ffffff;
-  --danger: #c0262d;
-  --weak: #d9480f;
-  --fair: #e0a800;
-  --strong: #2f9e44;
-  --very-strong: #1971c2;
-  --radius: 10px;
-  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
+/* Built-in palettes. They sit in a cascade layer so that instance colors
+   (/theme.css) and colors a visitor picks (set inline by theme.js) win. */
+@layer palette {
   :root {
+    color-scheme: light dark;
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --border: #dfe2ec;
+    --text: #1c1f2a;
+    --muted: #5f6578;
+    --accent: #4f46e5;
+    --accent-text: #ffffff;
+    --danger: #c0262d;
+    --weak: #d9480f;
+    --fair: #e0a800;
+    --strong: #2f9e44;
+    --very-strong: #1971c2;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  /* data-theme is system, light or dark (set by the server, then theme.js). */
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg: #12141b;
     --surface: #1b1e28;
     --border: #2d3140;
@@ -24,6 +30,18 @@
     --muted: #9aa0b4;
     --accent: #7c74ff;
     --danger: #ff6b6b;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141b;
+      --surface: #1b1e28;
+      --border: #2d3140;
+      --text: #e7e9f0;
+      --muted: #9aa0b4;
+      --accent: #7c74ff;
+      --danger: #ff6b6b;
+    }
   }
 }
 
@@ -186,3 +204,18 @@ a { color: var(--accent); }
 
 footer { font-size: 0.85rem; color: var(--muted); }
 footer code { word-break: break-all; }
+
+.appearance { margin-bottom: 1rem; }
+.appearance summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.appearance[open] summary { margin-bottom: 1rem; }
+.color-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5rem 1rem; margin-top: 0.35rem; }
+.color-field { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.color-field input[type="color"] {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0.15rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}

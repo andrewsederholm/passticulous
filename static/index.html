@@ -7,6 +7,8 @@
   <title>Passticulous</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M11 14v-3a5 5 0 0 1 10 0v3' fill='none' stroke='white' stroke-width='2.5'/%3E%3Crect x='8' y='14' width='16' height='11' rx='2' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/theme.js"></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -139,6 +141,33 @@
       </div>
       <p class="hint">Patterns are easy to remember but weaker than a fully random password. Check the strength meter, and add numbers, symbols or words to make it stronger.</p>
     </section>
+
+    <details class="options appearance">
+      <summary>Appearance</summary>
+      <div class="field">
+        <label for="theme-mode">Mode</label>
+        <select id="theme-mode">
+          <option value="system">Match my device</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+      <fieldset>
+        <legend>Colors</legend>
+        <div id="theme-colors" class="color-grid">
+          <label class="color-field"><input type="color" data-color="bg"> Background</label>
+          <label class="color-field"><input type="color" data-color="surface"> Panels</label>
+          <label class="color-field"><input type="color" data-color="text"> Text</label>
+          <label class="color-field"><input type="color" data-color="muted"> Secondary text</label>
+          <label class="color-field"><input type="color" data-color="border"> Borders</label>
+          <label class="color-field"><input type="color" data-color="accent"> Accent</label>
+        </div>
+      </fieldset>
+      <div class="chip-actions">
+        <button type="button" id="theme-reset" class="link">Reset to default</button>
+      </div>
+      <p class="hint">Saved in this browser only. Reset goes back to the look set for this Passticulous instance.</p>
+    </details>
 
     <footer>
       <p>Everything is generated locally with <code>crypto.getRandomValues</code>. Nothing you generate is sent to or stored on the server.</p>

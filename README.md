@@ -20,6 +20,8 @@ an optional HTTP API for scripts and `curl`.
   case (Title, lower, UPPER), how many numbers (0–16) and symbols (0–16),
   exactly which symbols are allowed (or the same fixed symbols, like `#@!`,
   every time), the order of the three parts, and an optional separator.
+- **Themes**: light, dark or follow the device, with every color adjustable.
+  Set the default for your instance, and visitors can tweak it for themselves.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
   generated values never leave your browser.
 - **Server API**: `GET /api/generate` for scripts, using the OS CSPRNG.
@@ -171,6 +173,8 @@ The server reads these environment variables:
 |-------------|-----------|-----------------------------------------------------|
 | `PORT`      | `8080`    | TCP port to listen on.                              |
 | `BIND_ADDR` | `0.0.0.0` | IP address to bind, e.g. `127.0.0.1` or `::`.       |
+| `THEME`     | `system`  | Default mode for visitors: `system` (follow their device), `light` or `dark`. |
+| `THEME_BG`, `THEME_SURFACE`, `THEME_TEXT`, `THEME_MUTED`, `THEME_BORDER`, `THEME_ACCENT` | built-in | Default colors as hex, e.g. `#2f9e44`: page background, panels, text, secondary text, borders, and the accent (buttons, tabs, sliders). Used in both light and dark mode. |
 
 With Docker Compose, set `PASSTICULOUS_PORT` in a `.env` file to change the
 **host** port. The container always listens on 8080 internally. To expose the
@@ -179,6 +183,23 @@ mapping in `docker-compose.yml` to `"127.0.0.1:${PASSTICULOUS_PORT:-8080}:8080"`
 This is a local edit to a tracked file, so see
 [Upgrading](#keep-local-settings-out-of-the-way-of-updates) for how to pull
 updates afterwards.
+
+### Theme
+
+The `THEME` settings set the default look for everyone who visits. With Docker
+Compose, add them to `.env` and run `docker compose up -d` again:
+
+```sh
+THEME=dark
+THEME_ACCENT=#2f9e44
+```
+
+Any color you leave out keeps the built-in light or dark value. Text on accent
+buttons switches between black and white automatically to stay readable.
+
+Visitors can override the mode and every color under **Appearance** at the
+bottom of the page. Their choices are saved only in their browser, and
+**Reset to default** goes back to your settings.
 
 ## API
 

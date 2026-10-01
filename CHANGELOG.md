@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Themes. Set the default mode (`THEME=system|light|dark`) and any of the
+  colors (`THEME_BG`, `THEME_SURFACE`, `THEME_TEXT`, `THEME_MUTED`,
+  `THEME_BORDER`, `THEME_ACCENT`) for your instance. Visitors can override the
+  mode and colors under **Appearance**; their choices are saved in their
+  browser only.
+
 ## [1.2.0] - 2026-10-01
 
 ### Added

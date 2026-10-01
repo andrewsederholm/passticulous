@@ -3,12 +3,13 @@
 //! Generated passwords are never logged or stored. The server does not log
 //! requests at all; the only output is the startup and shutdown messages.
 
-use crate::config::Config;
+use crate::config::{Config, Theme};
 use crate::generator::{
     self, Generated, Part, PassphraseOptions, PasswordOptions, PatternOptions, WordCase,
     WordCategory,
 };
 use axum::Router;
+use axum::body::Bytes;
 use axum::extract::rejection::QueryRejection;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderValue, StatusCode, header};
@@ -21,6 +22,7 @@ use serde::{Deserialize, Serialize};
 const INDEX_HTML: &str = include_str!("../static/index.html");
 const STYLE_CSS: &str = include_str!("../static/style.css");
 const APP_JS: &str = include_str!("../static/app.js");
+const THEME_JS: &str = include_str!("../static/theme.js");
 
 pub const MAX_COUNT: usize = 50;
 
@@ -35,26 +37,36 @@ pub async fn run(config: Config) -> std::io::Result<()> {
         "passticulous {} listening on http://{addr}",
         env!("CARGO_PKG_VERSION")
     );
-    axum::serve(listener, app())
+    axum::serve(listener, app(&config.theme))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     println!("passticulous shut down");
     Ok(())
 }
 
-pub fn app() -> Router {
+pub fn app(theme: &Theme) -> Router {
+    let index_html = Bytes::from(render_index(theme));
+    let theme_css = Bytes::from(render_theme_css(theme));
     Router::new()
         .route(
             "/",
-            get(|| static_asset("text/html; charset=utf-8", INDEX_HTML)),
+            get(move || async move { asset("text/html; charset=utf-8", index_html) }),
         )
         .route(
             "/style.css",
             get(|| static_asset("text/css; charset=utf-8", STYLE_CSS)),
         )
         .route(
+            "/theme.css",
+            get(move || async move { asset("text/css; charset=utf-8", theme_css) }),
+        )
+        .route(
             "/app.js",
             get(|| static_asset("text/javascript; charset=utf-8", APP_JS)),
+        )
+        .route(
+            "/theme.js",
+            get(|| static_asset("text/javascript; charset=utf-8", THEME_JS)),
         )
         .route(
             "/wordlist.txt",
@@ -67,6 +79,10 @@ pub fn app() -> Router {
 }
 
 async fn static_asset(content_type: &'static str, body: &'static str) -> Response {
+    asset(content_type, Bytes::from_static(body.as_bytes()))
+}
+
+fn asset(content_type: &'static str, body: Bytes) -> Response {
     (
         [
             (header::CONTENT_TYPE, content_type),
@@ -75,6 +91,53 @@ async fn static_asset(content_type: &'static str, body: &'static str) -> Respons
         body,
     )
         .into_response()
+}
+
+/// The page with the instance's default theme mode, e.g. `data-theme="dark"`.
+fn render_index(theme: &Theme) -> String {
+    INDEX_HTML.replacen(
+        "<html lang=\"en\">",
+        &format!("<html lang=\"en\" data-theme=\"{}\">", theme.mode.name()),
+        1,
+    )
+}
+
+/// The instance's custom colors as CSS variables. They are unlayered, so
+/// they win over the built-in light and dark palettes in `style.css`.
+fn render_theme_css(theme: &Theme) -> String {
+    let mut css = String::from("/* Instance theme colors (THEME_* settings). */\n");
+    if theme.colors.is_empty() {
+        return css;
+    }
+    css.push_str(":root {\n");
+    for (var, color) in &theme.colors {
+        css.push_str(&format!("  --{var}: {color};\n"));
+        if *var == "accent" {
+            css.push_str(&format!("  --accent-text: {};\n", readable_text_on(color)));
+        }
+    }
+    css.push_str("}\n");
+    css
+}
+
+/// Black or white, whichever contrasts more with a `#rrggbb` background.
+/// Mirrors `readableTextOn` in static/theme.js.
+fn readable_text_on(hex: &str) -> &'static str {
+    let channel = |i: usize| {
+        let c = f64::from(u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0)) / 255.0;
+        if c <= 0.03928 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    // Contrast against white is 1.05 / (L + 0.05); against black (L + 0.05) / 0.05.
+    if 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.05 {
+        "#ffffff"
+    } else {
+        "#000000"
+    }
 }
 
 /// Serves a category word list, e.g. `/wordlists/animals.txt`.
@@ -330,12 +393,17 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ThemeMode;
     use axum::body::{Body, to_bytes};
     use axum::http::Request;
     use tower::ServiceExt;
 
     async fn get(uri: &str) -> (StatusCode, axum::http::HeaderMap, String) {
-        let response = app()
+        get_with(&Theme::default(), uri).await
+    }
+
+    async fn get_with(theme: &Theme, uri: &str) -> (StatusCode, axum::http::HeaderMap, String) {
+        let response = app(theme)
             .oneshot(Request::get(uri).body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -366,9 +434,12 @@ mod tests {
             CONTENT_SECURITY_POLICY
         );
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+        assert!(body.contains("<html lang=\"en\" data-theme=\"system\">"));
         for path in [
             "/app.js",
+            "/theme.js",
             "/style.css",
+            "/theme.css",
             "/wordlist.txt",
             "/wordlists/animals.txt",
             "/wordlists/any.txt",
@@ -377,6 +448,42 @@ mod tests {
         }
         assert_eq!(get("/wordlists/nope.txt").await.0, StatusCode::NOT_FOUND);
         assert_eq!(get("/wordlists/animals").await.0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn serves_instance_theme() {
+        let (_, _, css) = get("/theme.css").await;
+        assert!(!css.contains(":root"), "{css}");
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            colors: vec![
+                ("bg", "#101010".to_string()),
+                ("accent", "#ffd43b".to_string()),
+            ],
+        };
+        let (_, _, html) = get_with(&theme, "/").await;
+        assert!(html.contains("<html lang=\"en\" data-theme=\"dark\">"));
+        let (status, headers, css) = get_with(&theme, "/theme.css").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(
+            headers[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/css")
+        );
+        assert!(css.contains("--bg: #101010;"), "{css}");
+        assert!(css.contains("--accent: #ffd43b;"), "{css}");
+        // Yellow is light, so text on accent buttons should be black.
+        assert!(css.contains("--accent-text: #000000;"), "{css}");
+    }
+
+    #[test]
+    fn readable_text_on_picks_the_higher_contrast() {
+        assert_eq!(readable_text_on("#4f46e5"), "#ffffff");
+        assert_eq!(readable_text_on("#000000"), "#ffffff");
+        assert_eq!(readable_text_on("#ffffff"), "#000000");
+        assert_eq!(readable_text_on("#ffd43b"), "#000000");
     }
 
     #[tokio::test]

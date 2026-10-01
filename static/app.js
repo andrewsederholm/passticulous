@@ -216,6 +216,9 @@ const el = {
   symbolPicked: $("symbol-picked"),
   patternOrder: $("pattern-order"),
   patternSeparator: $("pattern-separator"),
+  themeMode: $("theme-mode"),
+  themeColors: [...$("theme-colors").querySelectorAll("input[type=color]")],
+  themeReset: $("theme-reset"),
 };
 
 let mode = "password";
@@ -431,9 +434,58 @@ function flash(button, text) {
   button.flashTimer = setTimeout(() => (button.textContent = "Copy"), 1500);
 }
 
+// ---------- appearance (see theme.js) ----------
+
+/** Normalizes "#abc" or "#aabbcc" to "#aabbcc"; anything else gives null. */
+function toHex6(value) {
+  const v = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) return `#${[...v.slice(1)].map((c) => c + c).join("")}`;
+  return null;
+}
+
+// Shows the colors currently in effect, including defaults the visitor
+// hasn't changed.
+function showTheme(theme) {
+  el.themeMode.value = theme.mode ?? DEFAULT_THEME_MODE;
+  const style = getComputedStyle(document.documentElement);
+  for (const input of el.themeColors) {
+    const color = toHex6(style.getPropertyValue(`--${input.dataset.color}`));
+    if (color) input.value = color;
+  }
+}
+
+function initAppearance() {
+  let theme = loadTheme();
+  const update = () => {
+    saveTheme(theme);
+    applyTheme(theme);
+  };
+  showTheme(theme);
+
+  el.themeMode.addEventListener("input", () => {
+    theme.mode = el.themeMode.value;
+    update();
+    showTheme(theme);
+  });
+  for (const input of el.themeColors) {
+    input.addEventListener("input", () => {
+      theme.colors[input.dataset.color] = input.value.toLowerCase();
+      update();
+    });
+  }
+  el.themeReset.addEventListener("click", () => {
+    theme = { mode: null, colors: {} };
+    update();
+    showTheme(theme);
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => showTheme(theme));
+}
+
 function init() {
   buildSymbolChips();
   restoreOptions();
+  initAppearance();
   const fromHash = location.hash.slice(1);
   setMode(MODES.includes(fromHash) ? fromHash : mode);
   $("host").textContent = location.host || "localhost:8080";

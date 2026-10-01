@@ -10,6 +10,15 @@ services:
     environment:
       PORT: "8080"
       BIND_ADDR: "0.0.0.0"
+      # Default look for visitors. Set these in .env rather than here, e.g.
+      # THEME=dark and THEME_ACCENT=#2f9e44 (see README, Configuration).
+      THEME: "${THEME:-system}"
+      THEME_BG: "${THEME_BG:-}"
+      THEME_SURFACE: "${THEME_SURFACE:-}"
+      THEME_TEXT: "${THEME_TEXT:-}"
+      THEME_MUTED: "${THEME_MUTED:-}"
+      THEME_BORDER: "${THEME_BORDER:-}"
+      THEME_ACCENT: "${THEME_ACCENT:-}"
     read_only: true
     cap_drop:
       - ALL
