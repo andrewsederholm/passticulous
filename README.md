@@ -21,6 +21,8 @@
 
 ## What is Passticulous?
 
+Passticulous (pronouced PASS-TICK-YOU-LIS) is a password generator for when you need to get a little too particular with your passwords. Customize how they're generated, tweak the options however you want, and be as "passticulous" as you'd like.
+
 ## Features
 
 - **Passwords**: length 4–256, uppercase, lowercase, digits, symbols, and an
