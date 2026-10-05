@@ -21,7 +21,7 @@
 
 ## What is Passticulous?
 
-Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you need to get a little too particular with your passwords. Customize how they're generated, tweak the options however you want, and be as "passticulous" as you'd like.
+Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you need to get a little too particular with your passwords. Customize how they're generated, tweak the options however you want, and be as "passticulous" as you'd like. It's self-hosted: one small Rust binary serves a web UI that generates everything in your browser, plus an optional HTTP API for scripts and `curl`.
 
 ## Features
 
@@ -226,7 +226,7 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 
 | Parameter             | Default    | Applies to | Notes                          |
 |-----------------------|------------|------------|--------------------------------|
-| `mode`                | `password` | –          | `password` or `passphrase`     |
+| `mode`                | `password` | –          | `password`, `passphrase` or `pattern` |
 | `count`               | `1`        | –          | 1–50                           |
 | `format`              | `json`     | –          | `json` or `text` (one per line)|
 | `length`              | `20`       | password   | 4–256                          |
