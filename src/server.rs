@@ -93,13 +93,16 @@ fn asset(content_type: &'static str, body: Bytes) -> Response {
         .into_response()
 }
 
-/// The page with the instance's default theme mode, e.g. `data-theme="dark"`.
+/// The page with the instance's default theme mode, e.g. `data-theme="dark"`,
+/// and the running version in the footer.
 fn render_index(theme: &Theme) -> String {
-    INDEX_HTML.replacen(
-        "<html lang=\"en\">",
-        &format!("<html lang=\"en\" data-theme=\"{}\">", theme.mode.name()),
-        1,
-    )
+    INDEX_HTML
+        .replacen(
+            "<html lang=\"en\">",
+            &format!("<html lang=\"en\" data-theme=\"{}\">", theme.mode.name()),
+            1,
+        )
+        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
 }
 
 /// The instance's custom colors as CSS variables. They are unlayered, so
@@ -435,6 +438,9 @@ mod tests {
         );
         assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         assert!(body.contains("<html lang=\"en\" data-theme=\"system\">"));
+        let version = format!("Passticulous v{}", env!("CARGO_PKG_VERSION"));
+        assert!(body.contains(&version), "{body}");
+        assert!(!body.contains("{{VERSION}}"));
         for path in [
             "/app.js",
             "/theme.js",
