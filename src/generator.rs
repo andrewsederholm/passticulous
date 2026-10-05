@@ -31,7 +31,7 @@ pub const MAX_PATTERN_WORDS: usize = 5;
 pub const MAX_PATTERN_DIGITS: usize = 16;
 pub const MAX_PATTERN_SYMBOLS: usize = 16;
 
-/// The EFF large wordlist (7776 words), one word per line.
+/// The main wordlist (14,014 common lowercase words of 6–10 letters), one word per line.
 pub const WORDLIST_RAW: &str = include_str!("../assets/wordlist.txt");
 
 pub static WORDLIST: LazyLock<Vec<&'static str>> = LazyLock::new(|| parse_wordlist(WORDLIST_RAW));
@@ -40,7 +40,7 @@ fn parse_wordlist(raw: &'static str) -> Vec<&'static str> {
     raw.lines().filter(|w| !w.is_empty()).collect()
 }
 
-/// Themed word lists for pattern mode. `Any` is the full EFF wordlist.
+/// Themed word lists for pattern mode. `Any` is the full main wordlist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WordCategory {
     Any,
@@ -383,7 +383,7 @@ pub fn generate_password<R: RngCore + ?Sized>(
     })
 }
 
-/// Generates a passphrase of words chosen uniformly from the EFF wordlist.
+/// Generates a passphrase of words chosen uniformly from the main wordlist.
 pub fn generate_passphrase<R: RngCore + ?Sized>(
     rng: &mut R,
     opts: &PassphraseOptions,
@@ -696,14 +696,14 @@ mod tests {
     }
 
     #[test]
-    fn wordlist_is_the_eff_large_list() {
-        assert_eq!(WORDLIST.len(), 7776);
+    fn wordlist_is_unique_lowercase_words() {
+        assert_eq!(WORDLIST.len(), 14_014);
         let unique: HashSet<_> = WORDLIST.iter().collect();
-        assert_eq!(unique.len(), 7776);
+        assert_eq!(unique.len(), 14_014);
         assert!(
             WORDLIST
                 .iter()
-                .all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
+                .all(|w| (6..=10).contains(&w.len()) && w.chars().all(|c| c.is_ascii_lowercase()))
         );
     }
 
@@ -719,7 +719,7 @@ mod tests {
         let words: Vec<&str> = pp.value.split(" + ").collect();
         assert_eq!(words.len(), 7);
         assert!(words.iter().all(|w| WORDLIST.contains(w)), "{}", pp.value);
-        assert!((pp.entropy_bits - 7.0 * 7776f64.log2()).abs() < 1e-9);
+        assert!((pp.entropy_bits - 7.0 * (WORDLIST.len() as f64).log2()).abs() < 1e-9);
     }
 
     #[test]
@@ -816,7 +816,7 @@ mod tests {
             );
             assert_eq!(WordCategory::from_name(category.name()), Some(category));
         }
-        assert_eq!(WordCategory::Any.words().len(), 7776);
+        assert_eq!(WordCategory::Any.words().len(), WORDLIST.len());
         assert!(WordCategory::Animals.words().contains(&"giraffe"));
         assert_eq!(WordCategory::Elements.words().len(), 118);
         assert!(WordCategory::Elements.words().contains(&"rhodium"));

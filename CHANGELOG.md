@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-05
+
+### Changed
+
+- New main wordlist for passphrases and the pattern "Any word" type: 14,014
+  common English words of 6–10 letters (~13.8 bits per word), replacing the EFF
+  large wordlist (7,776 words, ~12.9 bits). Passphrases with the same number of
+  words are slightly stronger, and also longer. Offensive and sensitive words
+  have been removed.
+
 ## [1.5.0] - 2026-10-01
 
 ### Added
@@ -72,7 +82,8 @@ First release.
 - Multi-stage Dockerfile (distroless, non-root) and a `docker-compose.yml`
   with a configurable port, restart policy and healthcheck.
 
-[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/andrewsederholm/passticulous/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/andrewsederholm/passticulous/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/andrewsederholm/passticulous/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/andrewsederholm/passticulous/compare/v1.2.0...v1.3.0

@@ -28,12 +28,12 @@ Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you
 - **Passwords**: length 4–256, uppercase, lowercase, digits, symbols, and an
   option to exclude look-alike characters (`I l 1 | O 0 o`). Every enabled
   character type is guaranteed to appear at least once.
-- **Passphrases**: 3–20 words from the [EFF large wordlist](https://www.eff.org/dice)
-  (7,776 words, ~12.9 bits each), with a custom separator and optional
+- **Passphrases**: 3–20 words from a list of 14,014 common English words of
+  6–10 letters (~13.8 bits each), with a custom separator and optional
   capitalization.
 - **Patterns**: memorable passwords like `Giraffe3287#@!`. Pick a word type
-  (animals, colors, foods, nature, space, periodic elements, or any EFF word),
-  1–5 words and their case (Title, lower, UPPER), how many numbers (0–16) and
+  (animals, colors, foods, nature, space, periodic elements, or any word from
+  the main list), 1–5 words and their case (Title, lower, UPPER), how many numbers (0–16) and
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
   like `#@!`, every time), the order of the three parts, and an optional
   separator.
@@ -133,7 +133,7 @@ To install or stay on a particular release instead of the latest:
 
 ```sh
 git fetch --tags
-git checkout v1.5.0
+git checkout v1.6.0
 docker compose up -d --build
 ```
 
@@ -151,7 +151,7 @@ docker compose up -d --build
 If a new version causes a problem, check out the previous release and rebuild:
 
 ```sh
-git checkout v1.4.0
+git checkout v1.5.0
 docker compose up -d --build
 ```
 
@@ -251,7 +251,7 @@ $ curl -s 'http://localhost:8080/api/generate?length=24&count=2'
 {"mode":"password","entropy_bits":155.8,"passwords":["…","…"]}
 
 $ curl -s 'http://localhost:8080/api/generate?mode=passphrase&words=5&format=text'
-gravity-unsalted-overdue-shrank-comply
+achieved-doubly-peaked-thicker-village
 
 $ curl -s 'http://localhost:8080/api/generate?mode=pattern&category=animals&digit_count=4&symbol_set=%23%40%21&format=text'
 Giraffe3287#@!
@@ -291,7 +291,7 @@ runtime image has no shell or curl.
 - **Container.** Runs as a non-root user on a distroless image, with a
   read-only root filesystem, all capabilities dropped and `no-new-privileges`.
 - **Entropy figures** assume the attacker knows your settings. They are
-  `length × log2(pool size)` for passwords and `words × log2(7776)` for
+  `length × log2(pool size)` for passwords and `words × log2(14014)` for
   passphrases. Patterns add `log2` of the word list size per word, ~3.3 bits
   per number and `log2(allowed symbols)` per symbol (fixed symbols add
   nothing). A single themed word gives
@@ -323,7 +323,5 @@ Run `passticulous --version` to see which version you have. See
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
 
-The bundled wordlist (`assets/wordlist.txt`) is the
-[EFF Large Wordlist](https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases)
-by the Electronic Frontier Foundation, licensed under
-[CC BY 3.0 US](https://creativecommons.org/licenses/by/3.0/us/).
+The bundled wordlist (`assets/wordlist.txt`) was compiled for this project. It
+keeps only common lowercase words of 6–10 letters, with offensive words removed.
