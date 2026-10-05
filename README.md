@@ -138,7 +138,7 @@ To install or stay on a particular release instead of the latest:
 
 ```sh
 git fetch --tags
-git checkout v1.7.0
+git checkout v1.8.0
 docker compose up -d --build
 ```
 
