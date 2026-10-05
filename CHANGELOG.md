@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-05
+
 ### Added
 
 - The running version is shown at the bottom of the page, linking to its
@@ -87,7 +89,8 @@ First release.
 - Multi-stage Dockerfile (distroless, non-root) and a `docker-compose.yml`
   with a configurable port, restart policy and healthcheck.
 
-[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/andrewsederholm/passticulous/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/andrewsederholm/passticulous/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/andrewsederholm/passticulous/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/andrewsederholm/passticulous/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/andrewsederholm/passticulous/compare/v1.3.0...v1.4.0
