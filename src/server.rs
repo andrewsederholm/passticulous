@@ -5,8 +5,8 @@
 
 use crate::config::{Config, Theme};
 use crate::generator::{
-    self, Generated, Part, PassphraseOptions, PasswordOptions, PatternOptions, WordCase,
-    WordCategory,
+    self, Generated, Part, PassphraseOptions, PasswordOptions, PatternOptions, SimpleOptions,
+    WordCase, WordCategory,
 };
 use axum::Router;
 use axum::body::Bytes;
@@ -180,6 +180,7 @@ enum Mode {
     Password,
     Passphrase,
     Pattern,
+    Simple,
 }
 
 #[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -216,6 +217,9 @@ struct GenerateQuery {
     symbol_set: String,
     fixed_symbols: Option<String>,
     order: String,
+    // Simple options
+    min_length: usize,
+    word: Option<String>,
 }
 
 impl Default for GenerateQuery {
@@ -243,6 +247,8 @@ impl Default for GenerateQuery {
             symbol_set: pat.symbol_set,
             fixed_symbols: pat.fixed_symbols,
             order: "word,digits,symbols".to_string(),
+            min_length: SimpleOptions::default().min_length,
+            word: None,
         }
     }
 }
@@ -279,6 +285,7 @@ enum Options {
     Password(PasswordOptions),
     Passphrase(PassphraseOptions),
     Pattern(PatternOptions),
+    Simple(SimpleOptions),
 }
 
 impl Options {
@@ -323,6 +330,10 @@ impl Options {
                     separator: q.separator.clone().unwrap_or(defaults.separator),
                 })
             }
+            Mode::Simple => Self::Simple(SimpleOptions {
+                min_length: q.min_length,
+                word: q.word.clone(),
+            }),
         })
     }
 }
@@ -347,6 +358,7 @@ async fn generate(query: Result<Query<GenerateQuery>, QueryRejection>) -> Respon
             Options::Password(o) => generator::generate_password(&mut rng, o),
             Options::Passphrase(o) => generator::generate_passphrase(&mut rng, o),
             Options::Pattern(o) => generator::generate_pattern(&mut rng, o),
+            Options::Simple(o) => generator::generate_simple(&mut rng, o),
         })
         .collect();
     let results = match results {
@@ -567,6 +579,10 @@ mod tests {
             "/api/generate?mode=pattern&fixed_symbols=",
             "/api/generate?mode=pattern&fixed_symbols=%23a",
             "/api/generate?mode=pattern&words=6",
+            "/api/generate?mode=simple&min_length=9",
+            "/api/generate?mode=simple&min_length=17",
+            "/api/generate?mode=simple&word=",
+            "/api/generate?mode=simple&word=two%20words",
         ] {
             let (status, headers, body) = get(uri).await;
             assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
@@ -639,5 +655,28 @@ mod tests {
             let digits = &pw[pw.len() - 7..pw.len() - 3];
             assert!(digits.chars().all(|c| c.is_ascii_digit()), "{pw}");
         }
+    }
+
+    #[tokio::test]
+    async fn generate_simple_passwords() {
+        let (status, _, body) = get("/api/generate?mode=simple&count=20").await;
+        assert_eq!(status, StatusCode::OK);
+        let v = json(&body);
+        assert_eq!(v["mode"], "simple");
+        for pw in v["passwords"].as_array().unwrap() {
+            let pw = pw.as_str().unwrap();
+            assert!(pw.len() >= 12, "{pw}");
+            assert!(
+                generator::SIMPLE_SYMBOLS.contains(pw.chars().last().unwrap()),
+                "{pw}"
+            );
+        }
+
+        let (status, _, body) =
+            get("/api/generate?mode=simple&word=Welcome&min_length=14&format=text").await;
+        assert_eq!(status, StatusCode::OK);
+        let pw = body.trim_end();
+        assert!(pw.starts_with("Welcome"), "{pw}");
+        assert_eq!(pw.len(), 14, "{pw}");
     }
 }

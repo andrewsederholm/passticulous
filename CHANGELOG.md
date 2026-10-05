@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Simple** mode for temporary passwords that are easy to read out to a new
+  hire, like `Giraffe4821!`: an easy title-case word, numbers, then one symbol
+  (`! @ # $ ?`), at least 12 characters by default (10–16). Use a random word
+  or your own, like `Welcome` or your organization's name. Also available in
+  the API as `mode=simple` with `min_length` and `word`.
+
 ## [1.7.0] - 2026-10-05
 
 ### Added

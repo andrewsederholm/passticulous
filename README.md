@@ -37,14 +37,19 @@ Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
   like `#@!`, every time), the order of the three parts, and an optional
   separator.
+- **Simple temporary passwords**: easy to read out to a new hire, like
+  `Giraffe4821!`: an easy word, numbers, then one symbol (`! @ # $ ?`), at
+  least 12 characters by default (10–16). Use a random word or your own, like
+  `Welcome` or your organization's name. Weak on purpose, so only for
+  passwords that must be changed at first sign-in.
 - **Themes**: light, dark or follow the device, with every color adjustable
   and nine one-click presets. Set the default for your instance, and visitors
   can tweak it for themselves.
 - **Client-side generation**: the UI uses `crypto.getRandomValues`, so
   generated values never leave your browser.
 - **Server API**: `GET /api/generate` for scripts, using the OS CSPRNG.
-- **Bookmarkable modes**: open `/#password`, `/#passphrase` or `/#pattern`
-  directly.
+- **Bookmarkable modes**: open `/#password`, `/#passphrase`, `/#pattern` or
+  `/#simple` directly.
 - **Strength meter**: an entropy estimate for the current settings.
 - **One binary**: HTML, CSS, JS and the wordlist are embedded at compile time.
   No database, no state, no runtime files.
@@ -226,7 +231,7 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 
 | Parameter             | Default    | Applies to | Notes                          |
 |-----------------------|------------|------------|--------------------------------|
-| `mode`                | `password` | –          | `password`, `passphrase` or `pattern` |
+| `mode`                | `password` | –          | `password`, `passphrase`, `pattern` or `simple` |
 | `count`               | `1`        | –          | 1–50                           |
 | `format`              | `json`     | –          | `json` or `text` (one per line)|
 | `length`              | `20`       | password   | 4–256                          |
@@ -245,6 +250,8 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 | `symbol_set`          | `!@#$%&*?` | pattern    | any ASCII symbols; URL-encode it (`#` is `%23`) |
 | `fixed_symbols`       | none       | pattern    | 1–16 ASCII symbols used as-is every time; overrides `symbol_count` and `symbol_set` |
 | `order`               | `word,digits,symbols` | pattern | each part exactly once |
+| `min_length`          | `12`       | simple     | 10–16; digits are added until the password is this long |
+| `word`                | random     | simple     | your own word, used as-is (up to 32 characters, no spaces) |
 
 ```sh
 $ curl -s 'http://localhost:8080/api/generate?length=24&count=2'
@@ -258,6 +265,12 @@ Giraffe3287#@!
 
 $ curl -s 'http://localhost:8080/api/generate?mode=pattern&fixed_symbols=%23%40%21&format=text'
 Otter5102#@!
+
+$ curl -s 'http://localhost:8080/api/generate?mode=simple&format=text'
+Salamander94!
+
+$ curl -s 'http://localhost:8080/api/generate?mode=simple&word=Welcome&format=text'
+Welcome3816$
 ```
 
 Invalid parameters return `400` with `{"error": "..."}`.
@@ -297,7 +310,10 @@ runtime image has no shell or curl.
   nothing). A single themed word gives
   only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are
   meant to be easy to remember. Use more words, numbers or symbols, or the
-  Password mode, where strength matters. The "every type present" rule lowers this slightly, mostly at
+  Password mode, where strength matters. Simple passwords count the word
+  (or nothing, for your own word), the numbers and the one symbol, so they are
+  only around 10–30 bits. Use them only for temporary passwords that must be
+  changed at first sign-in. The "every type present" rule lowers this slightly, mostly at
   very short lengths.
 
 ## Development

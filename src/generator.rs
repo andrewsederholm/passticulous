@@ -30,6 +30,26 @@ pub const MIN_PATTERN_WORDS: usize = 1;
 pub const MAX_PATTERN_WORDS: usize = 5;
 pub const MAX_PATTERN_DIGITS: usize = 16;
 pub const MAX_PATTERN_SYMBOLS: usize = 16;
+/// Simple mode: symbols that are easy to say out loud.
+pub const SIMPLE_SYMBOLS: &str = "!@#$?";
+pub const MIN_SIMPLE_LENGTH: usize = 10;
+pub const MAX_SIMPLE_LENGTH: usize = 16;
+pub const DEFAULT_SIMPLE_LENGTH: usize = 12;
+pub const MAX_SIMPLE_WORD_LEN: usize = 32;
+/// Simple passwords always have at least this many digits...
+const MIN_SIMPLE_DIGITS: usize = 2;
+/// ...and random words are long enough to need at most this many.
+const MAX_SIMPLE_DIGITS: usize = 5;
+/// Random words are at least this long, so they don't feel like filler.
+const MIN_SIMPLE_WORD_LEN: usize = 6;
+/// Themed lists whose words are easy to say and spell, for simple mode.
+pub const SIMPLE_CATEGORIES: [WordCategory; 5] = [
+    WordCategory::Animals,
+    WordCategory::Colors,
+    WordCategory::Foods,
+    WordCategory::Nature,
+    WordCategory::Space,
+];
 
 /// The main wordlist (14,014 common lowercase words of 6–10 letters), one word per line.
 pub const WORDLIST_RAW: &str = include_str!("../assets/wordlist.txt");
@@ -181,6 +201,8 @@ pub enum GenerateError {
     InvalidSymbol(char),
     FixedSymbolsOutOfRange,
     InvalidOrder,
+    SimpleLengthOutOfRange,
+    InvalidSimpleWord,
 }
 
 impl fmt::Display for GenerateError {
@@ -223,6 +245,14 @@ impl fmt::Display for GenerateError {
             Self::InvalidOrder => {
                 write!(f, "order must list word, digits and symbols once each")
             }
+            Self::SimpleLengthOutOfRange => write!(
+                f,
+                "min_length must be between {MIN_SIMPLE_LENGTH} and {MAX_SIMPLE_LENGTH}"
+            ),
+            Self::InvalidSimpleWord => write!(
+                f,
+                "word must be 1 to {MAX_SIMPLE_WORD_LEN} characters with no spaces"
+            ),
         }
     }
 }
@@ -299,6 +329,25 @@ impl Default for PatternOptions {
             fixed_symbols: None,
             order: [Part::Word, Part::Digits, Part::Symbols],
             separator: String::new(),
+        }
+    }
+}
+
+/// Options for simple temporary passwords such as `Giraffe4821!`.
+#[derive(Debug, Clone)]
+pub struct SimpleOptions {
+    /// Digits are added until the password is at least this long.
+    pub min_length: usize,
+    /// A word to use every time (e.g. `Welcome` or a company name) instead
+    /// of a random one. Used exactly as typed.
+    pub word: Option<String>,
+}
+
+impl Default for SimpleOptions {
+    fn default() -> Self {
+        Self {
+            min_length: DEFAULT_SIMPLE_LENGTH,
+            word: None,
         }
     }
 }
@@ -501,6 +550,86 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
 
     Ok(Generated {
         value: segments.join(&opts.separator),
+        entropy_bits,
+    })
+}
+
+/// The words simple mode picks from: every themed word (except elements) of
+/// at least `MIN_SIMPLE_WORD_LEN` letters, de-duplicated.
+static SIMPLE_WORDS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    let mut words: Vec<&'static str> = SIMPLE_CATEGORIES
+        .iter()
+        .flat_map(|c| c.words().iter().copied())
+        .filter(|w| w.len() >= MIN_SIMPLE_WORD_LEN)
+        .collect();
+    words.sort_unstable();
+    words.dedup();
+    words
+});
+
+/// Digits needed after `word` to reach `min_length`, counting the one symbol.
+fn simple_digit_count(word_len: usize, min_length: usize) -> usize {
+    min_length
+        .saturating_sub(word_len + 1)
+        .max(MIN_SIMPLE_DIGITS)
+}
+
+/// Generates a simple temporary password: a title-case word, then digits,
+/// then one symbol, at least `min_length` characters long. Easy to read out
+/// to a new hire, but weak, so only for passwords that are changed at first
+/// sign-in.
+pub fn generate_simple<R: RngCore + ?Sized>(
+    rng: &mut R,
+    opts: &SimpleOptions,
+) -> Result<Generated, GenerateError> {
+    if !(MIN_SIMPLE_LENGTH..=MAX_SIMPLE_LENGTH).contains(&opts.min_length) {
+        return Err(GenerateError::SimpleLengthOutOfRange);
+    }
+    let symbols: Vec<char> = SIMPLE_SYMBOLS.chars().collect();
+    let symbol_bits = (symbols.len() as f64).log2();
+
+    let (word, entropy_bits) = match &opts.word {
+        Some(word) => {
+            let len = word.chars().count();
+            if !(1..=MAX_SIMPLE_WORD_LEN).contains(&len)
+                || word.chars().any(|c| c.is_whitespace() || c.is_control())
+            {
+                return Err(GenerateError::InvalidSimpleWord);
+            }
+            // The word is known to anyone who knows the setup, so only the
+            // digits and symbol count.
+            let digits = simple_digit_count(len, opts.min_length);
+            (word.clone(), digits as f64 * 10f64.log2() + symbol_bits)
+        }
+        None => {
+            // Only words that need at most MAX_SIMPLE_DIGITS digits.
+            let min_word_len = opts
+                .min_length
+                .saturating_sub(MAX_SIMPLE_DIGITS + 1)
+                .max(MIN_SIMPLE_WORD_LEN);
+            let list: Vec<&str> = SIMPLE_WORDS
+                .iter()
+                .copied()
+                .filter(|w| w.len() >= min_word_len)
+                .collect();
+            // Shorter words get more digits, so count every possible result.
+            let outcomes: f64 = list
+                .iter()
+                .map(|w| 10f64.powi(simple_digit_count(w.len(), opts.min_length) as i32))
+                .sum();
+            let word = capitalize(list[uniform_index(rng, list.len())]);
+            (word, outcomes.log2() + symbol_bits)
+        }
+    };
+
+    let digit_count = simple_digit_count(word.chars().count(), opts.min_length);
+    let digits: Vec<char> = DIGITS.chars().collect();
+    let mut value = word;
+    value.extend((0..digit_count).map(|_| digits[uniform_index(rng, digits.len())]));
+    value.push(symbols[uniform_index(rng, symbols.len())]);
+
+    Ok(Generated {
+        value,
         entropy_bits,
     })
 }
@@ -1017,6 +1146,79 @@ mod tests {
                 generate_pattern(&mut rng, &opts).unwrap_err(),
                 expected,
                 "{opts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn simple_is_word_digits_symbol_of_at_least_min_length() {
+        let mut rng = rng();
+        for min_length in MIN_SIMPLE_LENGTH..=MAX_SIMPLE_LENGTH {
+            let opts = SimpleOptions {
+                min_length,
+                word: None,
+            };
+            for _ in 0..200 {
+                let g = generate_simple(&mut rng, &opts).unwrap();
+                let v = &g.value;
+                assert!(v.len() >= min_length, "{v}");
+                let word: String = v.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+                assert!(word.len() >= MIN_SIMPLE_WORD_LEN, "{v}");
+                assert!(SIMPLE_WORDS.contains(&word.to_lowercase().as_str()), "{v}");
+                assert!(word.starts_with(|c: char| c.is_ascii_uppercase()), "{v}");
+                let digits = &v[word.len()..v.len() - 1];
+                assert!(
+                    (MIN_SIMPLE_DIGITS..=MAX_SIMPLE_DIGITS).contains(&digits.len()),
+                    "{v}"
+                );
+                assert!(digits.chars().all(|c| c.is_ascii_digit()), "{v}");
+                assert!(SIMPLE_SYMBOLS.contains(v.chars().last().unwrap()), "{v}");
+            }
+        }
+    }
+
+    #[test]
+    fn simple_pads_a_custom_word_with_digits() {
+        let mut rng = rng();
+        let opts = |word: &str| SimpleOptions {
+            min_length: 12,
+            word: Some(word.to_string()),
+        };
+        let g = generate_simple(&mut rng, &opts("Welcome")).unwrap();
+        assert!(g.value.starts_with("Welcome"), "{}", g.value);
+        assert_eq!(g.value.len(), 12, "{}", g.value);
+        // 4 digits and one of 5 symbols; the word itself adds nothing.
+        assert!((g.entropy_bits - (4.0 * 10f64.log2() + 5f64.log2())).abs() < 1e-9);
+
+        let g = generate_simple(&mut rng, &opts("Acme")).unwrap();
+        assert_eq!(g.value.len(), 12, "{}", g.value);
+        // Long words still get at least two digits and a symbol.
+        let g = generate_simple(&mut rng, &opts("Organization")).unwrap();
+        assert_eq!(g.value.len(), 15, "{}", g.value);
+    }
+
+    #[test]
+    fn simple_rejects_invalid_options() {
+        let mut rng = rng();
+        for min_length in [MIN_SIMPLE_LENGTH - 1, MAX_SIMPLE_LENGTH + 1] {
+            let opts = SimpleOptions {
+                min_length,
+                word: None,
+            };
+            assert_eq!(
+                generate_simple(&mut rng, &opts).unwrap_err(),
+                GenerateError::SimpleLengthOutOfRange
+            );
+        }
+        for word in ["", "two words", &"a".repeat(MAX_SIMPLE_WORD_LEN + 1)] {
+            let opts = SimpleOptions {
+                min_length: 12,
+                word: Some(word.to_string()),
+            };
+            assert_eq!(
+                generate_simple(&mut rng, &opts).unwrap_err(),
+                GenerateError::InvalidSimpleWord,
+                "{word:?}"
             );
         }
     }

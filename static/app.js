@@ -22,6 +22,15 @@ const MAX_PATTERN_WORDS = 5;
 const MAX_PATTERN_DIGITS = 16;
 const MAX_PATTERN_SYMBOLS = 16;
 const MAX_SEPARATOR_LEN = 8;
+const SIMPLE_SYMBOLS = "!@#$?";
+const MIN_SIMPLE_LENGTH = 10;
+const MAX_SIMPLE_LENGTH = 16;
+const DEFAULT_SIMPLE_LENGTH = 12;
+const MAX_SIMPLE_WORD_LEN = 32;
+const MIN_SIMPLE_DIGITS = 2;
+const MAX_SIMPLE_DIGITS = 5;
+const MIN_SIMPLE_WORD_LEN = 6;
+const SIMPLE_CATEGORIES = ["animals", "colors", "foods", "nature", "space"];
 const CATEGORIES = ["animals", "colors", "foods", "nature", "space", "elements", "any"];
 const ORDERS = [
   "word,digits,symbols",
@@ -31,7 +40,7 @@ const ORDERS = [
   "digits,symbols,word",
   "symbols,digits,word",
 ];
-const MODES = ["password", "passphrase", "pattern"];
+const MODES = ["password", "passphrase", "pattern", "simple"];
 const U32_MAX = 0xffffffff;
 const STORAGE_KEY = "passticulous:options";
 
@@ -156,6 +165,53 @@ function generatePattern(opts, wordlist) {
   return { value: segments.join(opts.separator), entropyBits };
 }
 
+/** Digits needed after a word to reach minLength, counting the one symbol. */
+function simpleDigitCount(wordLength, minLength) {
+  return Math.max(MIN_SIMPLE_DIGITS, minLength - wordLength - 1);
+}
+
+// A title-case word, then digits, then one symbol, at least minLength long.
+// `words` is every themed word of at least MIN_SIMPLE_WORD_LEN letters.
+function generateSimple(opts, words) {
+  if (!(opts.minLength >= MIN_SIMPLE_LENGTH && opts.minLength <= MAX_SIMPLE_LENGTH)) {
+    throw new Error(`Minimum length must be between ${MIN_SIMPLE_LENGTH} and ${MAX_SIMPLE_LENGTH}.`);
+  }
+  const symbolBits = Math.log2(SIMPLE_SYMBOLS.length);
+  let word;
+  let entropyBits;
+  if (opts.word) {
+    const length = [...opts.word].length;
+    if (length > MAX_SIMPLE_WORD_LEN || /\s/.test(opts.word)) {
+      throw new Error(`Your word must be at most ${MAX_SIMPLE_WORD_LEN} characters with no spaces.`);
+    }
+    word = opts.word;
+    // The word is known to anyone who knows the setup, so only the digits
+    // and symbol count.
+    entropyBits = simpleDigitCount(length, opts.minLength) * Math.log2(10) + symbolBits;
+  } else {
+    // Only words that need at most MAX_SIMPLE_DIGITS digits.
+    const minWordLength = Math.max(MIN_SIMPLE_WORD_LEN, opts.minLength - MAX_SIMPLE_DIGITS - 1);
+    const list = words.filter((w) => w.length >= minWordLength);
+    // Shorter words get more digits, so count every possible result.
+    const outcomes = list.reduce((sum, w) => sum + 10 ** simpleDigitCount(w.length, opts.minLength), 0);
+    word = capitalize(pick(list));
+    entropyBits = Math.log2(outcomes) + symbolBits;
+  }
+  const digits = Array.from({ length: simpleDigitCount([...word].length, opts.minLength) }, () => pick(DIGITS));
+  return { value: word + digits.join("") + pick(SIMPLE_SYMBOLS), entropyBits };
+}
+
+let simpleWords;
+function loadSimpleWords() {
+  simpleWords ??= Promise.all(SIMPLE_CATEGORIES.map(loadWordlist))
+    .then((lists) => [...new Set(lists.flat())].filter((w) => w.length >= MIN_SIMPLE_WORD_LEN))
+    .catch((err) => {
+      simpleWords = undefined;
+      throw err;
+    });
+  return simpleWords;
+}
+
 const wordlists = new Map();
 function loadWordlist(category) {
   if (!wordlists.has(category)) {
@@ -216,6 +272,9 @@ const el = {
   symbolPicked: $("symbol-picked"),
   patternOrder: $("pattern-order"),
   patternSeparator: $("pattern-separator"),
+  simpleLength: $("simple-length"),
+  simpleLengthValue: $("simple-length-value"),
+  simpleWord: $("simple-word"),
   themeMode: $("theme-mode"),
   themeColors: [...$("theme-colors").querySelectorAll("input[type=color]")],
   themeReset: $("theme-reset"),
@@ -285,6 +344,10 @@ function readOptions() {
       order: el.patternOrder.value,
       separator: el.patternSeparator.value,
     },
+    simple: {
+      minLength: intValue(el.simpleLength, DEFAULT_SIMPLE_LENGTH, MIN_SIMPLE_LENGTH, MAX_SIMPLE_LENGTH),
+      word: el.simpleWord.value.trim(),
+    },
   };
 }
 
@@ -312,6 +375,12 @@ function restoreOptions() {
   if (Number.isInteger(saved.words)) el.words.value = clamp(saved.words, MIN_WORDS, MAX_WORDS);
   if (typeof saved.separator === "string") el.separator.value = saved.separator.slice(0, MAX_SEPARATOR_LEN);
   if (MODES.includes(saved.mode)) mode = saved.mode;
+
+  const s = saved.simple;
+  if (s && typeof s === "object") {
+    if (Number.isInteger(s.minLength)) el.simpleLength.value = clamp(s.minLength, MIN_SIMPLE_LENGTH, MAX_SIMPLE_LENGTH);
+    if (typeof s.word === "string") el.simpleWord.value = s.word.slice(0, MAX_SIMPLE_WORD_LEN);
+  }
 
   const p = saved.pattern;
   if (!p || typeof p !== "object") return;
@@ -380,6 +449,7 @@ function updateLabels(opts) {
   el.patternWordsValue.textContent = `(${p.words})`;
   el.patternDigitsValue.textContent = `(${p.digits})`;
   el.patternSymbolsValue.textContent = `(${p.symbols})`;
+  el.simpleLengthValue.textContent = `(${opts.simple.minLength})`;
   const picked = new Set(p.symbolSet).size;
   el.symbolPicked.textContent = `(${picked} selected)`;
   // Fixed symbols replace the random count and picker.
@@ -399,6 +469,8 @@ async function generate() {
       result = generatePassword(opts);
     } else if (opts.mode === "passphrase") {
       result = generatePassphrase(opts, await loadWordlist("any"));
+    } else if (opts.mode === "simple") {
+      result = generateSimple(opts.simple, await loadSimpleWords());
     } else {
       const list = await loadWordlist(opts.pattern.category);
       if (id === generation) {
@@ -571,6 +643,7 @@ function init() {
     el.words, el.separator, el.capitalize,
     el.patternCategory, el.patternCase, el.patternWords, el.patternDigits,
     el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
+    el.simpleLength, el.simpleWord,
   ]) {
     input.addEventListener("input", generate);
   }

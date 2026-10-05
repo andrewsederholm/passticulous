@@ -22,6 +22,7 @@
       <button type="button" role="tab" id="tab-password" aria-controls="panel-password" aria-selected="true">Password</button>
       <button type="button" role="tab" id="tab-passphrase" aria-controls="panel-passphrase" aria-selected="false" tabindex="-1">Passphrase</button>
       <button type="button" role="tab" id="tab-pattern" aria-controls="panel-pattern" aria-selected="false" tabindex="-1">Pattern</button>
+      <button type="button" role="tab" id="tab-simple" aria-controls="panel-simple" aria-selected="false" tabindex="-1">Simple</button>
     </div>
 
     <section class="output" aria-label="Generated result">
@@ -141,6 +142,21 @@
         </div>
       </div>
       <p class="hint">Patterns are easy to remember but weaker than a fully random password. Check the strength meter, and add numbers, symbols or words to make it stronger.</p>
+    </section>
+
+    <section id="panel-simple" class="options" role="tabpanel" aria-labelledby="tab-simple" hidden>
+      <p class="hint top">A temporary password that's easy to read out to a new hire, like <code>Giraffe4821!</code>: an easy word, then numbers, then one symbol.</p>
+      <div class="field">
+        <label for="simple-length">Minimum length <span id="simple-length-value" class="value"></span></label>
+        <input type="range" id="simple-length" min="10" max="16" value="12">
+        <p class="hint small">Numbers are added until the password is at least this long.</p>
+      </div>
+      <div class="field">
+        <label for="simple-word">Your own word <span class="value">(optional)</span></label>
+        <input type="text" id="simple-word" value="" maxlength="32" placeholder="random, or e.g. Welcome" autocomplete="off" spellcheck="false">
+        <p class="hint small">Use the same word every time, like <code>Welcome</code> or your organization's name. Leave empty for a random one.</p>
+      </div>
+      <p class="hint">Simple passwords are weak on purpose. Only use them as temporary passwords that must be changed at first sign-in.</p>
     </section>
 
     <details class="options appearance">
