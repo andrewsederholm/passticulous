@@ -46,6 +46,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Keep `hidden` working on elements that set their own display. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;

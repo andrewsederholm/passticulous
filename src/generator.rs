@@ -30,6 +30,7 @@ pub const MIN_PATTERN_WORDS: usize = 1;
 pub const MAX_PATTERN_WORDS: usize = 5;
 pub const MAX_PATTERN_DIGITS: usize = 16;
 pub const MAX_PATTERN_SYMBOLS: usize = 16;
+pub const MAX_PATTERN_REPEAT: usize = 5;
 /// Simple mode: symbols that are easy to say out loud.
 pub const SIMPLE_SYMBOLS: &str = "!@#$?";
 pub const MIN_SIMPLE_LENGTH: usize = 10;
@@ -206,6 +207,7 @@ pub enum GenerateError {
     InvalidSymbol(char),
     FixedSymbolsOutOfRange,
     InvalidOrder,
+    RepeatOutOfRange,
     SimpleLengthOutOfRange,
     InvalidSimpleWord,
     NoWordsLongEnough(WordCategory),
@@ -251,6 +253,9 @@ impl fmt::Display for GenerateError {
             }
             Self::InvalidOrder => {
                 write!(f, "order must list word, digits and symbols once each")
+            }
+            Self::RepeatOutOfRange => {
+                write!(f, "repeat must be between 1 and {MAX_PATTERN_REPEAT}")
             }
             Self::SimpleLengthOutOfRange => write!(
                 f,
@@ -338,6 +343,12 @@ pub struct PatternOptions {
     pub order: [Part; 3],
     /// Placed between every word and section. Empty by default.
     pub separator: String,
+    /// How many times the whole pattern is repeated, with new words and
+    /// numbers each time, e.g. `Giraffe8434Penguin2899#@!` for 2.
+    pub repeat: usize,
+    /// Repeat the symbols too. Otherwise they appear once, at the same end
+    /// of the password as in `order`.
+    pub repeat_symbols: bool,
 }
 
 impl Default for PatternOptions {
@@ -354,6 +365,8 @@ impl Default for PatternOptions {
             fixed_symbols: None,
             order: [Part::Word, Part::Digits, Part::Symbols],
             separator: String::new(),
+            repeat: 1,
+            repeat_symbols: false,
         }
     }
 }
@@ -506,6 +519,9 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
     if !is_permutation(&opts.order) {
         return Err(GenerateError::InvalidOrder);
     }
+    if !(1..=MAX_PATTERN_REPEAT).contains(&opts.repeat) {
+        return Err(GenerateError::RepeatOutOfRange);
+    }
     // Fixed symbols are used verbatim (repeats allowed); otherwise symbols
     // are drawn from the de-duplicated set.
     let symbols = match &opts.fixed_symbols {
@@ -555,37 +571,49 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
         });
     }
     let digits: Vec<char> = DIGITS.chars().collect();
+    // Unless they repeat, symbols go in the first round if they lead the
+    // order, otherwise in the last.
+    let symbol_rounds = if opts.repeat_symbols { opts.repeat } else { 1 };
+    let symbol_round = if opts.order[0] == Part::Symbols {
+        0
+    } else {
+        opts.repeat - 1
+    };
     let mut segments: Vec<String> = Vec::new();
-    for part in opts.order {
-        match part {
-            Part::Word => segments.extend(
-                (0..opts.words).map(|_| opts.case.apply(list[uniform_index(rng, list.len())])),
-            ),
-            Part::Digits if opts.digits > 0 => segments.push(
-                (0..opts.digits)
-                    .map(|_| digits[uniform_index(rng, digits.len())])
-                    .collect(),
-            ),
-            Part::Symbols => match &symbols {
-                SymbolSource::Fixed(fixed) => segments.push(fixed.to_string()),
-                SymbolSource::Random(set) if opts.symbols > 0 => segments.push(
-                    (0..opts.symbols)
-                        .map(|_| set[uniform_index(rng, set.len())])
+    for round in 0..opts.repeat {
+        for part in opts.order {
+            match part {
+                Part::Word => segments.extend(
+                    (0..opts.words).map(|_| opts.case.apply(list[uniform_index(rng, list.len())])),
+                ),
+                Part::Digits if opts.digits > 0 => segments.push(
+                    (0..opts.digits)
+                        .map(|_| digits[uniform_index(rng, digits.len())])
                         .collect(),
                 ),
-                SymbolSource::Random(_) => {}
-            },
-            Part::Digits => {}
+                Part::Symbols if !opts.repeat_symbols && round != symbol_round => {}
+                Part::Symbols => match &symbols {
+                    SymbolSource::Fixed(fixed) => segments.push(fixed.to_string()),
+                    SymbolSource::Random(set) if opts.symbols > 0 => segments.push(
+                        (0..opts.symbols)
+                            .map(|_| set[uniform_index(rng, set.len())])
+                            .collect(),
+                    ),
+                    SymbolSource::Random(_) => {}
+                },
+                Part::Digits => {}
+            }
         }
     }
 
-    let mut entropy_bits = opts.words as f64 * (list.len() as f64).log2()
-        + opts.digits as f64 * (digits.len() as f64).log2();
+    let mut entropy_bits = opts.repeat as f64
+        * (opts.words as f64 * (list.len() as f64).log2()
+            + opts.digits as f64 * (digits.len() as f64).log2());
     // Fixed symbols are known to the attacker, so they add no entropy.
     if let SymbolSource::Random(set) = &symbols
         && opts.symbols > 0
     {
-        entropy_bits += opts.symbols as f64 * (set.len() as f64).log2();
+        entropy_bits += (symbol_rounds * opts.symbols) as f64 * (set.len() as f64).log2();
     }
 
     Ok(Generated {
@@ -1034,6 +1062,8 @@ mod tests {
             fixed_symbols: None,
             order: [Part::Symbols, Part::Word, Part::Digits],
             separator: ".".to_string(),
+            repeat: 1,
+            repeat_symbols: false,
         };
         for _ in 0..100 {
             let pp = generate_pattern(&mut rng, &opts).unwrap();
@@ -1186,6 +1216,92 @@ mod tests {
     }
 
     #[test]
+    fn pattern_repeats_words_and_numbers_with_symbols_once() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            repeat: 2,
+            separator: "-".to_string(),
+            ..Default::default()
+        };
+        let animals = WordCategory::Animals.words();
+        for _ in 0..100 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            // Like Giraffe-8434-Penguin-2899-#@!
+            let s: Vec<&str> = pp.value.split('-').collect();
+            assert_eq!(s.len(), 5, "{}", pp.value);
+            for i in [0, 2] {
+                assert!(animals.contains(&s[i].to_lowercase().as_str()), "{}", pp.value);
+                assert!(s[i + 1].len() == 4 && s[i + 1].chars().all(|c| c.is_ascii_digit()));
+            }
+            assert!(s[4].len() == 3 && s[4].chars().all(|c| DEFAULT_PATTERN_SYMBOLS.contains(c)));
+            let expected = 2.0 * ((animals.len() as f64).log2() + 4.0 * 10f64.log2()) + 9.0;
+            assert!((pp.entropy_bits - expected).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn pattern_keeps_single_symbols_at_their_end() {
+        let mut rng = rng();
+        let is_symbols = |s: &str| s.chars().all(|c| DEFAULT_PATTERN_SYMBOLS.contains(c));
+        // Symbols first: once, at the start.
+        let opts = PatternOptions {
+            repeat: 3,
+            order: [Part::Symbols, Part::Word, Part::Digits],
+            separator: "-".to_string(),
+            ..Default::default()
+        };
+        let pp = generate_pattern(&mut rng, &opts).unwrap().value;
+        let s: Vec<&str> = pp.split('-').collect();
+        assert_eq!(s.len(), 7, "{pp}");
+        assert!(is_symbols(s[0]), "{pp}");
+        assert!(s[1..].iter().all(|seg| !is_symbols(seg)), "{pp}");
+
+        // Symbols in the middle: once, in the last round.
+        let opts = PatternOptions {
+            order: [Part::Word, Part::Symbols, Part::Digits],
+            ..opts
+        };
+        let pp = generate_pattern(&mut rng, &opts).unwrap().value;
+        let s: Vec<&str> = pp.split('-').collect();
+        assert_eq!(s.len(), 7, "{pp}");
+        assert!(is_symbols(s[5]), "{pp}");
+        assert_eq!(s.iter().filter(|seg| is_symbols(seg)).count(), 1, "{pp}");
+    }
+
+    #[test]
+    fn pattern_can_repeat_symbols_too() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            words: 2,
+            repeat: 3,
+            repeat_symbols: true,
+            fixed_symbols: Some("#@".to_string()),
+            separator: ".".to_string(),
+            ..Default::default()
+        };
+        let pp = generate_pattern(&mut rng, &opts).unwrap();
+        // 3 x (2 words, digits, symbols).
+        let s: Vec<&str> = pp.value.split('.').collect();
+        assert_eq!(s.len(), 12, "{}", pp.value);
+        for round in s.chunks(4) {
+            assert!(round[2].chars().all(|c| c.is_ascii_digit()), "{}", pp.value);
+            assert_eq!(round[3], "#@", "{}", pp.value);
+        }
+        // Fixed symbols still add nothing.
+        let animals = WordCategory::Animals.words().len() as f64;
+        let expected = 3.0 * (2.0 * animals.log2() + 4.0 * 10f64.log2());
+        assert!((pp.entropy_bits - expected).abs() < 1e-9);
+
+        let random = PatternOptions {
+            fixed_symbols: None,
+            ..opts
+        };
+        let pp = generate_pattern(&mut rng, &random).unwrap();
+        // 9 random symbols from a set of 8 = 27 bits.
+        assert!((pp.entropy_bits - (expected + 27.0)).abs() < 1e-9);
+    }
+
+    #[test]
     fn pattern_rejects_invalid_options() {
         let mut rng = rng();
         let cases = [
@@ -1265,6 +1381,20 @@ mod tests {
                     ..Default::default()
                 },
                 GenerateError::SeparatorTooLong,
+            ),
+            (
+                PatternOptions {
+                    repeat: 0,
+                    ..Default::default()
+                },
+                GenerateError::RepeatOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    repeat: MAX_PATTERN_REPEAT + 1,
+                    ..Default::default()
+                },
+                GenerateError::RepeatOutOfRange,
             ),
         ];
         for (opts, expected) in cases {

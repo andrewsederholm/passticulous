@@ -36,8 +36,9 @@ Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you
   the main list), 1–5 words and their case (Title, lower, UPPER), a minimum
   or exact word length, how many numbers (0–16) and
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
-  like `#@!`, every time), the order of the three parts, and an optional
-  separator.
+  like `#@!`, every time), the order of the three parts, an optional
+  separator, and how many times to repeat the pattern (1–5), like
+  `Giraffe8434Penguin2899#@!`.
 - **Simple temporary passwords**: easy to read out to a new hire, like
   `Giraffe4821!`: an easy word, numbers, then one symbol (`! @ # $ ?`), at
   least 12 characters by default (10–16). Use a random word or your own, like
@@ -253,6 +254,8 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 | `symbol_set`          | `!@#$%&*?` | pattern    | any ASCII symbols; URL-encode it (`#` is `%23`) |
 | `fixed_symbols`       | none       | pattern    | 1–16 ASCII symbols used as-is every time; overrides `symbol_count` and `symbol_set` |
 | `order`               | `word,digits,symbols` | pattern | each part exactly once |
+| `repeat`              | `1`        | pattern    | 1–5; repeats the pattern with new words and numbers |
+| `repeat_symbols`      | `false`    | pattern    | repeat the symbols too; otherwise they appear once |
 | `min_length`          | `12`       | simple     | 10–16; digits are added until the password is this long |
 | `word`                | random     | simple     | your own word, used as-is (up to 32 characters, no spaces) |
 
@@ -268,6 +271,9 @@ Giraffe3287#@!
 
 $ curl -s 'http://localhost:8080/api/generate?mode=pattern&fixed_symbols=%23%40%21&format=text'
 Otter5102#@!
+
+$ curl -s 'http://localhost:8080/api/generate?mode=pattern&repeat=2&format=text'
+Giraffe8434Penguin2899#@!
 
 $ curl -s 'http://localhost:8080/api/generate?mode=simple&format=text'
 Salamander94!
@@ -311,7 +317,7 @@ runtime image has no shell or curl.
   passphrases. Patterns add `log2` of the word list size per word (only the
   words that fit, with a minimum or exact word length), ~3.3 bits
   per number and `log2(allowed symbols)` per symbol (fixed symbols add
-  nothing). A single themed word gives
+  nothing), counted again for each repeat. A single themed word gives
   only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are
   meant to be easy to remember. Use more words, numbers or symbols, or the
   Password mode, where strength matters. Simple passwords count the word

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Repeat** for patterns: repeat the whole pattern 2–5 times with new words
+  and numbers each time, like `Giraffe8434Penguin2899#@!`. Symbols are added
+  once, at the same end as in the chosen order, or tick "Repeat symbols too"
+  for `Giraffe8434#@!Penguin2899$%&`. Each repeat makes the password stronger.
+  Also available in the API as `repeat` and `repeat_symbols`.
+
 ## [1.11.0] - 2026-10-05
 
 ### Added

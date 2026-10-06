@@ -147,6 +147,12 @@
           <input type="text" id="pattern-separator" value="" maxlength="8" placeholder="none" autocomplete="off" spellcheck="false">
         </div>
       </div>
+      <div class="field">
+        <label for="pattern-repeat">Repeat <span id="pattern-repeat-value" class="value"></span></label>
+        <input type="range" id="pattern-repeat" min="1" max="5" value="1">
+        <label id="pattern-repeat-symbols-field" class="check" hidden><input type="checkbox" id="pattern-repeat-symbols"> Repeat symbols too</label>
+        <p class="hint small">Repeat the pattern with new words and numbers, like <code>Giraffe8434Penguin2899#@!</code>. Symbols are added once unless you repeat them too.</p>
+      </div>
       <p class="hint">Patterns are easy to remember but weaker than a fully random password. Check the strength meter, and add numbers, symbols or words to make it stronger.</p>
     </section>
 

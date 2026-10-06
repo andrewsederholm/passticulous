@@ -21,6 +21,7 @@ const MIN_PATTERN_WORDS = 1;
 const MAX_PATTERN_WORDS = 5;
 const MAX_PATTERN_DIGITS = 16;
 const MAX_PATTERN_SYMBOLS = 16;
+const MAX_PATTERN_REPEAT = 5;
 const MAX_SEPARATOR_LEN = 8;
 const SIMPLE_SYMBOLS = "!@#$?";
 const MIN_SIMPLE_LENGTH = 10;
@@ -129,6 +130,9 @@ function generatePattern(opts, wordlist) {
   if (!(opts.digits >= 0 && opts.digits <= MAX_PATTERN_DIGITS)) {
     throw new Error(`Numbers must be between 0 and ${MAX_PATTERN_DIGITS}.`);
   }
+  if (!(opts.repeat >= 1 && opts.repeat <= MAX_PATTERN_REPEAT)) {
+    throw new Error(`Repeat must be between 1 and ${MAX_PATTERN_REPEAT}.`);
+  }
   // Fixed symbols are used verbatim (repeats allowed) instead of random ones.
   const fixed = opts.fixed ? [...opts.fixedSymbols] : null;
   if (fixed) {
@@ -156,22 +160,31 @@ function generatePattern(opts, wordlist) {
     throw new Error(`Minimum word length is too long: the longest word in this list is ${longest} letters.`);
   }
 
+  const order = opts.order.split(",");
+  // Unless they repeat, symbols go in the first round if they lead the
+  // order, otherwise in the last.
+  const symbolRounds = opts.repeatSymbols ? opts.repeat : 1;
+  const symbolRound = order[0] === "symbols" ? 0 : opts.repeat - 1;
   const segments = [];
-  for (const part of opts.order.split(",")) {
-    if (part === "word") {
-      for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(words)));
-    } else if (part === "digits" && opts.digits > 0) {
-      segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
-    } else if (part === "symbols" && fixed) {
-      segments.push(fixed.join(""));
-    } else if (part === "symbols" && opts.symbols > 0) {
-      segments.push(Array.from({ length: opts.symbols }, () => pick(symbolSet)).join(""));
+  for (let round = 0; round < opts.repeat; round++) {
+    for (const part of order) {
+      if (part === "word") {
+        for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(words)));
+      } else if (part === "digits" && opts.digits > 0) {
+        segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
+      } else if (part === "symbols" && !opts.repeatSymbols && round !== symbolRound) {
+        // Symbols are added once, in another round.
+      } else if (part === "symbols" && fixed) {
+        segments.push(fixed.join(""));
+      } else if (part === "symbols" && opts.symbols > 0) {
+        segments.push(Array.from({ length: opts.symbols }, () => pick(symbolSet)).join(""));
+      }
     }
   }
 
-  let entropyBits = opts.words * Math.log2(words.length) + opts.digits * Math.log2(10);
+  let entropyBits = opts.repeat * (opts.words * Math.log2(words.length) + opts.digits * Math.log2(10));
   // Fixed symbols are known to an attacker, so they add no entropy.
-  if (!fixed && opts.symbols > 0) entropyBits += opts.symbols * Math.log2(symbolSet.length);
+  if (!fixed && opts.symbols > 0) entropyBits += symbolRounds * opts.symbols * Math.log2(symbolSet.length);
   return { value: segments.join(opts.separator), entropyBits };
 }
 
@@ -285,6 +298,10 @@ const el = {
   symbolPicked: $("symbol-picked"),
   patternOrder: $("pattern-order"),
   patternSeparator: $("pattern-separator"),
+  patternRepeat: $("pattern-repeat"),
+  patternRepeatValue: $("pattern-repeat-value"),
+  patternRepeatSymbols: $("pattern-repeat-symbols"),
+  patternRepeatSymbolsField: $("pattern-repeat-symbols-field"),
   simpleLength: $("simple-length"),
   simpleLengthValue: $("simple-length-value"),
   simpleWord: $("simple-word"),
@@ -376,6 +393,8 @@ function readOptions() {
       fixedSymbols: el.patternFixedSymbols.value,
       order: el.patternOrder.value,
       separator: el.patternSeparator.value,
+      repeat: intValue(el.patternRepeat, 1, 1, MAX_PATTERN_REPEAT),
+      repeatSymbols: el.patternRepeatSymbols.checked,
     },
     simple: {
       minLength: intValue(el.simpleLength, DEFAULT_SIMPLE_LENGTH, MIN_SIMPLE_LENGTH, MAX_SIMPLE_LENGTH),
@@ -436,6 +455,8 @@ function restoreOptions() {
   }
   if (ORDERS.includes(p.order)) el.patternOrder.value = p.order;
   if (typeof p.separator === "string") el.patternSeparator.value = p.separator.slice(0, MAX_SEPARATOR_LEN);
+  if (Number.isInteger(p.repeat)) el.patternRepeat.value = clamp(p.repeat, 1, MAX_PATTERN_REPEAT);
+  if (typeof p.repeatSymbols === "boolean") el.patternRepeatSymbols.checked = p.repeatSymbols;
 }
 
 function setLength(n) {
@@ -495,6 +516,8 @@ function updateLabels(opts) {
   el.patternDigitsValue.textContent = `(${p.digits})`;
   el.patternSymbolsValue.textContent = `(${p.symbols})`;
   el.simpleLengthValue.textContent = `(${opts.simple.minLength})`;
+  el.patternRepeatValue.textContent = p.repeat > 1 ? `(${p.repeat}×)` : "(off)";
+  el.patternRepeatSymbolsField.hidden = p.repeat === 1;
   const picked = new Set(p.symbolSet).size;
   el.symbolPicked.textContent = `(${picked} selected)`;
   // Fixed symbols replace the random count and picker.
@@ -698,6 +721,7 @@ function init() {
     el.words, el.separator, el.capitalize,
     el.patternCategory, el.patternCase, el.patternWords, el.patternMinWordLength, el.patternExactLength, el.patternDigits,
     el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
+    el.patternRepeat, el.patternRepeatSymbols,
     el.simpleLength, el.simpleWord,
   ]) {
     input.addEventListener("input", generate);

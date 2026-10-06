@@ -219,6 +219,8 @@ struct GenerateQuery {
     symbol_set: String,
     fixed_symbols: Option<String>,
     order: String,
+    repeat: usize,
+    repeat_symbols: bool,
     // Simple options
     min_length: usize,
     word: Option<String>,
@@ -251,6 +253,8 @@ impl Default for GenerateQuery {
             symbol_set: pat.symbol_set,
             fixed_symbols: pat.fixed_symbols,
             order: "word,digits,symbols".to_string(),
+            repeat: pat.repeat,
+            repeat_symbols: pat.repeat_symbols,
             min_length: SimpleOptions::default().min_length,
             word: None,
         }
@@ -334,6 +338,8 @@ impl Options {
                     fixed_symbols: q.fixed_symbols.clone(),
                     order,
                     separator: q.separator.clone().unwrap_or(defaults.separator),
+                    repeat: q.repeat,
+                    repeat_symbols: q.repeat_symbols,
                 })
             }
             Mode::Simple => Self::Simple(SimpleOptions {
@@ -590,6 +596,8 @@ mod tests {
             "/api/generate?mode=pattern&min_word_length=abc",
             "/api/generate?mode=pattern&category=space&word_length=12",
             "/api/generate?mode=pattern&word_length=",
+            "/api/generate?mode=pattern&repeat=0",
+            "/api/generate?mode=pattern&repeat=6",
             "/api/generate?mode=simple&min_length=9",
             "/api/generate?mode=simple&min_length=17",
             "/api/generate?mode=simple&word=",
@@ -699,6 +707,24 @@ mod tests {
             json(&body)["error"],
             "no space words are exactly 12 characters long"
         );
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_with_repeat() {
+        let (status, _, body) =
+            get("/api/generate?mode=pattern&repeat=2&separator=_&format=text").await;
+        assert_eq!(status, StatusCode::OK);
+        // Like Giraffe_8434_Penguin_2899_#@!
+        let segments: Vec<&str> = body.trim_end().split('_').collect();
+        assert_eq!(segments.len(), 5, "{body}");
+        assert!(segments[3].chars().all(|c| c.is_ascii_digit()), "{body}");
+
+        let (status, _, body) = get(
+            "/api/generate?mode=pattern&repeat=3&repeat_symbols=true&separator=_&format=text",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.trim_end().split('_').count(), 9, "{body}");
     }
 
     #[tokio::test]
