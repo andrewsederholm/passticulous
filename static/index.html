@@ -102,6 +102,11 @@
         <input type="range" id="pattern-words" min="1" max="5" value="1">
       </div>
       <div class="field">
+        <label for="pattern-include-word">Include your own word <span class="value">(optional)</span></label>
+        <input type="text" id="pattern-include-word" value="" maxlength="32" placeholder="e.g. Kingston" autocomplete="off" spellcheck="false">
+        <p class="hint small">Added once, exactly as typed, at a random spot among the random words. It adds no strength, since anyone who knows your settings knows it.</p>
+      </div>
+      <div class="field">
         <label for="pattern-min-word-length">Word length <span id="pattern-min-word-length-value" class="value"></span></label>
         <input type="range" id="pattern-min-word-length" min="1" max="32" value="1">
         <label class="check"><input type="checkbox" id="pattern-exact-length"> Exactly this length</label>

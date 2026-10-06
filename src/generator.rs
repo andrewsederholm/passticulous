@@ -210,6 +210,7 @@ pub enum GenerateError {
     RepeatOutOfRange,
     SimpleLengthOutOfRange,
     InvalidSimpleWord,
+    InvalidIncludeWord,
     NoWordsLongEnough(WordCategory),
     NoWordsOfLength(WordCategory, usize),
 }
@@ -264,6 +265,10 @@ impl fmt::Display for GenerateError {
             Self::InvalidSimpleWord => write!(
                 f,
                 "word must be 1 to {MAX_SIMPLE_WORD_LEN} characters with no spaces"
+            ),
+            Self::InvalidIncludeWord => write!(
+                f,
+                "include_word must be 1 to {MAX_SIMPLE_WORD_LEN} characters with no spaces"
             ),
             Self::NoWordsLongEnough(category) => write!(
                 f,
@@ -349,6 +354,9 @@ pub struct PatternOptions {
     /// Repeat the symbols too. Otherwise they appear once, at the same end
     /// of the password as in `order`.
     pub repeat_symbols: bool,
+    /// A word of your own (e.g. `Kingston`) added once, used exactly as
+    /// typed, at a random spot among the random words.
+    pub include_word: Option<String>,
 }
 
 impl Default for PatternOptions {
@@ -367,6 +375,7 @@ impl Default for PatternOptions {
             separator: String::new(),
             repeat: 1,
             repeat_symbols: false,
+            include_word: None,
         }
     }
 }
@@ -522,6 +531,9 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
     if !(1..=MAX_PATTERN_REPEAT).contains(&opts.repeat) {
         return Err(GenerateError::RepeatOutOfRange);
     }
+    if opts.include_word.as_deref().is_some_and(|w| !is_valid_own_word(w)) {
+        return Err(GenerateError::InvalidIncludeWord);
+    }
     // Fixed symbols are used verbatim (repeats allowed); otherwise symbols
     // are drawn from the de-duplicated set.
     let symbols = match &opts.fixed_symbols {
@@ -579,13 +591,27 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
     } else {
         opts.repeat - 1
     };
+    // The included word goes before any of the random words in a random
+    // round, or after all of them. Its spot adds no entropy, to be safe.
+    let include_at = opts.include_word.as_ref().map(|word| {
+        let round = uniform_index(rng, opts.repeat);
+        (round, uniform_index(rng, opts.words + 1), word)
+    });
     let mut segments: Vec<String> = Vec::new();
     for round in 0..opts.repeat {
         for part in opts.order {
             match part {
-                Part::Word => segments.extend(
-                    (0..opts.words).map(|_| opts.case.apply(list[uniform_index(rng, list.len())])),
-                ),
+                Part::Word => {
+                    let mut words: Vec<String> = (0..opts.words)
+                        .map(|_| opts.case.apply(list[uniform_index(rng, list.len())]))
+                        .collect();
+                    if let Some((r, i, word)) = include_at
+                        && r == round
+                    {
+                        words.insert(i, word.clone());
+                    }
+                    segments.extend(words);
+                }
                 Part::Digits if opts.digits > 0 => segments.push(
                     (0..opts.digits)
                         .map(|_| digits[uniform_index(rng, digits.len())])
@@ -635,6 +661,13 @@ static SIMPLE_WORDS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     words
 });
 
+/// A word of the user's own: 1 to `MAX_SIMPLE_WORD_LEN` characters with no
+/// spaces or control characters.
+fn is_valid_own_word(word: &str) -> bool {
+    (1..=MAX_SIMPLE_WORD_LEN).contains(&word.chars().count())
+        && !word.chars().any(|c| c.is_whitespace() || c.is_control())
+}
+
 /// Digits needed after `word` to reach `min_length`, counting the one symbol.
 fn simple_digit_count(word_len: usize, min_length: usize) -> usize {
     min_length
@@ -658,12 +691,10 @@ pub fn generate_simple<R: RngCore + ?Sized>(
 
     let (word, entropy_bits) = match &opts.word {
         Some(word) => {
-            let len = word.chars().count();
-            if !(1..=MAX_SIMPLE_WORD_LEN).contains(&len)
-                || word.chars().any(|c| c.is_whitespace() || c.is_control())
-            {
+            if !is_valid_own_word(word) {
                 return Err(GenerateError::InvalidSimpleWord);
             }
+            let len = word.chars().count();
             // The word is known to anyone who knows the setup, so only the
             // digits and symbol count.
             let digits = simple_digit_count(len, opts.min_length);
@@ -1064,6 +1095,7 @@ mod tests {
             separator: ".".to_string(),
             repeat: 1,
             repeat_symbols: false,
+            include_word: None,
         };
         for _ in 0..100 {
             let pp = generate_pattern(&mut rng, &opts).unwrap();
@@ -1302,6 +1334,56 @@ mod tests {
     }
 
     #[test]
+    fn pattern_includes_own_word_once_at_a_random_spot() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            category: WordCategory::Elements,
+            words: 2,
+            case: WordCase::Upper,
+            include_word: Some("Kingston".to_string()),
+            separator: "-".to_string(),
+            ..Default::default()
+        };
+        let elements = WordCategory::Elements.words();
+        let mut spots = HashSet::new();
+        for _ in 0..300 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            // Like LUTETIUM-Kingston-THULIUM-9902-#@!
+            let s: Vec<&str> = pp.value.split('-').collect();
+            assert_eq!(s.len(), 5, "{}", pp.value);
+            let spot = s.iter().position(|w| *w == "Kingston").expect(&pp.value);
+            assert!(spot < 3, "{}", pp.value);
+            spots.insert(spot);
+            // The other two are random words in the chosen case.
+            for w in s[..3].iter().filter(|w| **w != "Kingston") {
+                assert!(elements.contains(&w.to_lowercase().as_str()), "{}", pp.value);
+                assert_eq!(*w, w.to_uppercase());
+            }
+            // Your own word adds no strength.
+            let expected = 2.0 * (elements.len() as f64).log2() + 4.0 * 10f64.log2() + 9.0;
+            assert!((pp.entropy_bits - expected).abs() < 1e-9);
+        }
+        assert_eq!(spots.len(), 3, "{spots:?}");
+
+        // With repeats it can land in any round, but only once.
+        let opts = PatternOptions {
+            words: 1,
+            repeat: 3,
+            ..opts
+        };
+        let mut rounds = HashSet::new();
+        for _ in 0..300 {
+            let pw = generate_pattern(&mut rng, &opts).unwrap().value;
+            assert_eq!(pw.matches("Kingston").count(), 1, "{pw}");
+            let s: Vec<&str> = pw.split('-').collect();
+            let spot = s.iter().position(|w| *w == "Kingston").unwrap();
+            // Rounds are word, word/Kingston, digits; symbols at the end.
+            rounds.insert(s[..spot].iter().filter(|w| w.chars().all(|c| c.is_ascii_digit())).count());
+        }
+        assert_eq!(rounds.len(), 3, "{rounds:?}");
+    }
+
+    #[test]
     fn pattern_rejects_invalid_options() {
         let mut rng = rng();
         let cases = [
@@ -1388,6 +1470,27 @@ mod tests {
                     ..Default::default()
                 },
                 GenerateError::RepeatOutOfRange,
+            ),
+            (
+                PatternOptions {
+                    include_word: Some(String::new()),
+                    ..Default::default()
+                },
+                GenerateError::InvalidIncludeWord,
+            ),
+            (
+                PatternOptions {
+                    include_word: Some("two words".to_string()),
+                    ..Default::default()
+                },
+                GenerateError::InvalidIncludeWord,
+            ),
+            (
+                PatternOptions {
+                    include_word: Some("a".repeat(MAX_SIMPLE_WORD_LEN + 1)),
+                    ..Default::default()
+                },
+                GenerateError::InvalidIncludeWord,
             ),
             (
                 PatternOptions {

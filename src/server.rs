@@ -221,6 +221,7 @@ struct GenerateQuery {
     order: String,
     repeat: usize,
     repeat_symbols: bool,
+    include_word: Option<String>,
     // Simple options
     min_length: usize,
     word: Option<String>,
@@ -255,6 +256,7 @@ impl Default for GenerateQuery {
             order: "word,digits,symbols".to_string(),
             repeat: pat.repeat,
             repeat_symbols: pat.repeat_symbols,
+            include_word: pat.include_word,
             min_length: SimpleOptions::default().min_length,
             word: None,
         }
@@ -340,6 +342,7 @@ impl Options {
                     separator: q.separator.clone().unwrap_or(defaults.separator),
                     repeat: q.repeat,
                     repeat_symbols: q.repeat_symbols,
+                    include_word: q.include_word.clone(),
                 })
             }
             Mode::Simple => Self::Simple(SimpleOptions {
@@ -598,6 +601,8 @@ mod tests {
             "/api/generate?mode=pattern&word_length=",
             "/api/generate?mode=pattern&repeat=0",
             "/api/generate?mode=pattern&repeat=6",
+            "/api/generate?mode=pattern&include_word=",
+            "/api/generate?mode=pattern&include_word=two%20words",
             "/api/generate?mode=simple&min_length=9",
             "/api/generate?mode=simple&min_length=17",
             "/api/generate?mode=simple&word=",
@@ -725,6 +730,23 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body.trim_end().split('_').count(), 9, "{body}");
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_with_include_word() {
+        let (status, _, body) = get(
+            "/api/generate?mode=pattern&category=elements&words=2&include_word=Kingston\
+             &separator=_&count=20",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let v = json(&body);
+        for pw in v["passwords"].as_array().unwrap() {
+            let pw = pw.as_str().unwrap();
+            let segments: Vec<&str> = pw.split('_').collect();
+            assert_eq!(segments.len(), 5, "{pw}");
+            assert!(segments[..3].contains(&"Kingston"), "{pw}");
+        }
     }
 
     #[tokio::test]

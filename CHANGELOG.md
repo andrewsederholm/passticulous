@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Include your own word** in patterns: type a word like `Kingston` and it
+  is added once, exactly as typed, at a random spot among the random words,
+  like `LutetiumKingstonThulium9902#@!`. It adds no strength, since anyone
+  who knows your settings knows it. Also available in the API as
+  `include_word`.
+
 ## [1.12.0] - 2026-10-05
 
 ### Added

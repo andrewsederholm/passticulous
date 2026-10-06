@@ -38,7 +38,8 @@ Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
   like `#@!`, every time), the order of the three parts, an optional
   separator, and how many times to repeat the pattern (1–5), like
-  `Giraffe8434Penguin2899#@!`.
+  `Giraffe8434Penguin2899#@!`. Optionally include a word of your own, like
+  `Kingston`, once at a random spot among the random words.
 - **Simple temporary passwords**: easy to read out to a new hire, like
   `Giraffe4821!`: an easy word, numbers, then one symbol (`! @ # $ ?`), at
   least 12 characters by default (10–16). Use a random word or your own, like
@@ -256,6 +257,7 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 | `order`               | `word,digits,symbols` | pattern | each part exactly once |
 | `repeat`              | `1`        | pattern    | 1–5; repeats the pattern with new words and numbers |
 | `repeat_symbols`      | `false`    | pattern    | repeat the symbols too; otherwise they appear once |
+| `include_word`        | none       | pattern    | your own word, added once as-is at a random spot among the words (up to 32 characters, no spaces) |
 | `min_length`          | `12`       | simple     | 10–16; digits are added until the password is this long |
 | `word`                | random     | simple     | your own word, used as-is (up to 32 characters, no spaces) |
 
@@ -317,7 +319,7 @@ runtime image has no shell or curl.
   passphrases. Patterns add `log2` of the word list size per word (only the
   words that fit, with a minimum or exact word length), ~3.3 bits
   per number and `log2(allowed symbols)` per symbol (fixed symbols add
-  nothing), counted again for each repeat. A single themed word gives
+  nothing), counted again for each repeat. A word of your own adds nothing. A single themed word gives
   only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are
   meant to be easy to remember. Use more words, numbers or symbols, or the
   Password mode, where strength matters. Simple passwords count the word

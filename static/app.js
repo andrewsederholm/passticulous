@@ -133,6 +133,9 @@ function generatePattern(opts, wordlist) {
   if (!(opts.repeat >= 1 && opts.repeat <= MAX_PATTERN_REPEAT)) {
     throw new Error(`Repeat must be between 1 and ${MAX_PATTERN_REPEAT}.`);
   }
+  if (opts.includeWord && ([...opts.includeWord].length > MAX_SIMPLE_WORD_LEN || /\s/.test(opts.includeWord))) {
+    throw new Error(`Your word must be at most ${MAX_SIMPLE_WORD_LEN} characters with no spaces.`);
+  }
   // Fixed symbols are used verbatim (repeats allowed) instead of random ones.
   const fixed = opts.fixed ? [...opts.fixedSymbols] : null;
   if (fixed) {
@@ -165,11 +168,17 @@ function generatePattern(opts, wordlist) {
   // order, otherwise in the last.
   const symbolRounds = opts.repeatSymbols ? opts.repeat : 1;
   const symbolRound = order[0] === "symbols" ? 0 : opts.repeat - 1;
+  // The included word goes before any of the random words in a random
+  // round, or after all of them. Its spot adds no entropy, to be safe.
+  const includeRound = opts.includeWord ? uniformIndex(opts.repeat) : -1;
+  const includeAt = opts.includeWord ? uniformIndex(opts.words + 1) : -1;
   const segments = [];
   for (let round = 0; round < opts.repeat; round++) {
     for (const part of order) {
       if (part === "word") {
-        for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(words)));
+        const roundWords = Array.from({ length: opts.words }, () => applyCase(pick(words)));
+        if (round === includeRound) roundWords.splice(includeAt, 0, opts.includeWord);
+        segments.push(...roundWords);
       } else if (part === "digits" && opts.digits > 0) {
         segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
       } else if (part === "symbols" && !opts.repeatSymbols && round !== symbolRound) {
@@ -282,6 +291,7 @@ const el = {
   patternCase: $("pattern-case"),
   patternWords: $("pattern-words"),
   patternWordsValue: $("pattern-words-value"),
+  patternIncludeWord: $("pattern-include-word"),
   patternMinWordLength: $("pattern-min-word-length"),
   patternMinWordLengthValue: $("pattern-min-word-length-value"),
   patternExactLength: $("pattern-exact-length"),
@@ -395,6 +405,7 @@ function readOptions() {
       separator: el.patternSeparator.value,
       repeat: intValue(el.patternRepeat, 1, 1, MAX_PATTERN_REPEAT),
       repeatSymbols: el.patternRepeatSymbols.checked,
+      includeWord: el.patternIncludeWord.value.trim(),
     },
     simple: {
       minLength: intValue(el.simpleLength, DEFAULT_SIMPLE_LENGTH, MIN_SIMPLE_LENGTH, MAX_SIMPLE_LENGTH),
@@ -457,6 +468,7 @@ function restoreOptions() {
   if (typeof p.separator === "string") el.patternSeparator.value = p.separator.slice(0, MAX_SEPARATOR_LEN);
   if (Number.isInteger(p.repeat)) el.patternRepeat.value = clamp(p.repeat, 1, MAX_PATTERN_REPEAT);
   if (typeof p.repeatSymbols === "boolean") el.patternRepeatSymbols.checked = p.repeatSymbols;
+  if (typeof p.includeWord === "string") el.patternIncludeWord.value = p.includeWord.slice(0, MAX_SIMPLE_WORD_LEN);
 }
 
 function setLength(n) {
@@ -721,7 +733,7 @@ function init() {
     el.words, el.separator, el.capitalize,
     el.patternCategory, el.patternCase, el.patternWords, el.patternMinWordLength, el.patternExactLength, el.patternDigits,
     el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
-    el.patternRepeat, el.patternRepeatSymbols,
+    el.patternRepeat, el.patternRepeatSymbols, el.patternIncludeWord,
     el.simpleLength, el.simpleWord,
   ]) {
     input.addEventListener("input", generate);
