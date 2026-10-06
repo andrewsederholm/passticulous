@@ -459,6 +459,7 @@ mod tests {
         let version = format!("Passticulous v{}", env!("CARGO_PKG_VERSION"));
         assert!(body.contains(&version), "{body}");
         assert!(!body.contains("{{VERSION}}"));
+        assert!(body.contains("href=\"https://github.com/andrewsederholm/passticulous\""));
         for path in [
             "/app.js",
             "/theme.js",

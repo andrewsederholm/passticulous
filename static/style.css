@@ -205,8 +205,11 @@ a { color: var(--accent); }
 
 footer { font-size: 0.85rem; color: var(--muted); }
 footer code { word-break: break-all; }
-footer .version { text-align: center; }
+footer .version { display: flex; justify-content: center; align-items: center; gap: 0.6rem; }
 footer .version a { color: inherit; }
+footer .repo { display: inline-flex; }
+footer .repo svg { width: 1.15rem; height: 1.15rem; }
+footer .repo:hover { color: var(--text); }
 
 .appearance { margin-bottom: 1rem; }
 .appearance summary { cursor: pointer; font-weight: 600; color: var(--muted); }

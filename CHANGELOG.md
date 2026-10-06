@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A GitHub icon next to the version at the bottom of the page, linking to the
+  Passticulous repository.
+
 ## [1.10.0] - 2026-10-05
 
 ### Added
