@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Minimum word length** for patterns: only use words with at least this
+  many letters. The slider runs from the chosen word type's shortest word to
+  its longest, and the page shows how many words are long enough. Fewer words
+  means a weaker password, and the strength meter accounts for it. Also
+  available in the API as `min_word_length`.
+
 ## [1.8.0] - 2026-10-05
 
 ### Added

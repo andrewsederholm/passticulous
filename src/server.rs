@@ -211,6 +211,7 @@ struct GenerateQuery {
     capitalize: bool,
     // Pattern options
     category: String,
+    min_word_length: usize,
     case: String,
     digit_count: usize,
     symbol_count: usize,
@@ -241,6 +242,7 @@ impl Default for GenerateQuery {
             separator: None,
             capitalize: pp.capitalize,
             category: pat.category.name().to_string(),
+            min_word_length: pat.min_word_length,
             case: "title".to_string(),
             digit_count: pat.digits,
             symbol_count: pat.symbols,
@@ -321,6 +323,7 @@ impl Options {
                 Self::Pattern(PatternOptions {
                     category,
                     words: q.words.unwrap_or(defaults.words),
+                    min_word_length: q.min_word_length,
                     case,
                     digits: q.digit_count,
                     symbols: q.symbol_count,
@@ -579,6 +582,8 @@ mod tests {
             "/api/generate?mode=pattern&fixed_symbols=",
             "/api/generate?mode=pattern&fixed_symbols=%23a",
             "/api/generate?mode=pattern&words=6",
+            "/api/generate?mode=pattern&category=nature&min_word_length=11",
+            "/api/generate?mode=pattern&min_word_length=abc",
             "/api/generate?mode=simple&min_length=9",
             "/api/generate?mode=simple&min_length=17",
             "/api/generate?mode=simple&word=",
@@ -640,6 +645,30 @@ mod tests {
             );
             assert_eq!(*word, word.to_uppercase());
         }
+    }
+
+    #[tokio::test]
+    async fn generate_pattern_with_min_word_length() {
+        let (status, _, body) = get(
+            "/api/generate?mode=pattern&category=animals&min_word_length=9\
+             &case=lower&digit_count=0&symbol_count=0&count=20",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let v = json(&body);
+        for pw in v["passwords"].as_array().unwrap() {
+            let pw = pw.as_str().unwrap();
+            assert!(pw.len() >= 9, "{pw}");
+            assert!(WordCategory::Animals.words().contains(&pw), "{pw}");
+        }
+        // 37 animals are 9+ letters: log2(37) = 5.2 bits.
+        assert_eq!(v["entropy_bits"], 5.2);
+
+        let (_, _, body) = get("/api/generate?mode=pattern&category=nature&min_word_length=11").await;
+        assert_eq!(
+            json(&body)["error"],
+            "min_word_length is too long: the longest nature word is 10 characters"
+        );
     }
 
     #[tokio::test]

@@ -145,11 +145,16 @@ function generatePattern(opts, wordlist) {
     throw new Error("Pick at least one allowed symbol, or set Symbols to 0.");
   }
   const applyCase = CASES[opts.case] ?? CASES.title;
+  const words = wordlist.filter((w) => w.length >= opts.minWordLength);
+  if (words.length === 0) {
+    const longest = Math.max(...wordlist.map((w) => w.length));
+    throw new Error(`Minimum word length is too long: the longest word in this list is ${longest} letters.`);
+  }
 
   const segments = [];
   for (const part of opts.order.split(",")) {
     if (part === "word") {
-      for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(wordlist)));
+      for (let i = 0; i < opts.words; i++) segments.push(applyCase(pick(words)));
     } else if (part === "digits" && opts.digits > 0) {
       segments.push(Array.from({ length: opts.digits }, () => pick(DIGITS)).join(""));
     } else if (part === "symbols" && fixed) {
@@ -159,7 +164,7 @@ function generatePattern(opts, wordlist) {
     }
   }
 
-  let entropyBits = opts.words * Math.log2(wordlist.length) + opts.digits * Math.log2(10);
+  let entropyBits = opts.words * Math.log2(words.length) + opts.digits * Math.log2(10);
   // Fixed symbols are known to an attacker, so they add no entropy.
   if (!fixed && opts.symbols > 0) entropyBits += opts.symbols * Math.log2(symbolSet.length);
   return { value: segments.join(opts.separator), entropyBits };
@@ -259,6 +264,8 @@ const el = {
   patternCase: $("pattern-case"),
   patternWords: $("pattern-words"),
   patternWordsValue: $("pattern-words-value"),
+  patternMinWordLength: $("pattern-min-word-length"),
+  patternMinWordLengthValue: $("pattern-min-word-length-value"),
   patternDigits: $("pattern-digits"),
   patternDigitsValue: $("pattern-digits-value"),
   patternFixed: $("pattern-fixed"),
@@ -291,6 +298,23 @@ function clamp(n, lo, hi) {
 function intValue(input, fallback, lo, hi) {
   const n = parseInt(input.value, 10);
   return clamp(Number.isNaN(n) ? fallback : n, lo, hi);
+}
+
+// The slider runs from the list's shortest word ("any") to its longest. At
+// its minimum there is no limit, saved as 0.
+function minWordLength() {
+  const input = el.patternMinWordLength;
+  return Number(input.value) > Number(input.min) ? Number(input.value) : 0;
+}
+
+// Fits the slider to a newly loaded list, keeping "any" if it was set.
+function fitMinWordLength(list) {
+  const input = el.patternMinWordLength;
+  const lengths = list.map((w) => w.length);
+  const wasAny = minWordLength() === 0;
+  input.min = Math.min(...lengths);
+  input.max = Math.max(...lengths);
+  if (wasAny) input.value = input.min;
 }
 
 function selectedSymbols() {
@@ -336,6 +360,7 @@ function readOptions() {
       category: el.patternCategory.value,
       case: el.patternCase.value,
       words: intValue(el.patternWords, 1, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS),
+      minWordLength: minWordLength(),
       digits: intValue(el.patternDigits, 4, 0, MAX_PATTERN_DIGITS),
       symbols: intValue(el.patternSymbols, 3, 0, MAX_PATTERN_SYMBOLS),
       symbolSet: selectedSymbols(),
@@ -387,6 +412,8 @@ function restoreOptions() {
   if (CATEGORIES.includes(p.category)) el.patternCategory.value = p.category;
   if (p.case in CASES) el.patternCase.value = p.case;
   if (Number.isInteger(p.words)) el.patternWords.value = clamp(p.words, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS);
+  // Fitted to the word list once it loads.
+  if (Number.isInteger(p.minWordLength)) el.patternMinWordLength.value = p.minWordLength;
   if (Number.isInteger(p.digits)) el.patternDigits.value = clamp(p.digits, 0, MAX_PATTERN_DIGITS);
   if (Number.isInteger(p.symbols)) el.patternSymbols.value = clamp(p.symbols, 0, MAX_PATTERN_SYMBOLS);
   if (typeof p.symbolSet === "string") setSelectedSymbols(p.symbolSet);
@@ -447,6 +474,7 @@ function updateLabels(opts) {
   el.lengthValue.textContent = `(${opts.length})`;
   el.wordsValue.textContent = `(${opts.words})`;
   el.patternWordsValue.textContent = `(${p.words})`;
+  el.patternMinWordLengthValue.textContent = p.minWordLength ? `(${p.minWordLength}+ letters)` : "(any)";
   el.patternDigitsValue.textContent = `(${p.digits})`;
   el.patternSymbolsValue.textContent = `(${p.symbols})`;
   el.simpleLengthValue.textContent = `(${opts.simple.minLength})`;
@@ -473,9 +501,16 @@ async function generate() {
       result = generateSimple(opts.simple, await loadSimpleWords());
     } else {
       const list = await loadWordlist(opts.pattern.category);
-      if (id === generation) {
-        el.patternCategorySize.textContent = `${list.length.toLocaleString()} words to choose from`;
-      }
+      if (id !== generation) return;
+      fitMinWordLength(list);
+      opts.pattern.minWordLength = minWordLength();
+      updateLabels(opts);
+      saveOptions(opts);
+      const matching = list.filter((w) => w.length >= opts.pattern.minWordLength).length;
+      el.patternCategorySize.textContent =
+        matching === list.length
+          ? `${list.length.toLocaleString()} words to choose from`
+          : `${matching.toLocaleString()} of ${list.length.toLocaleString()} words ${matching === 1 ? "is" : "are"} long enough`;
       result = generatePattern(opts.pattern, list);
     }
     if (id === generation) showResult(result);
@@ -641,7 +676,7 @@ function init() {
   for (const input of [
     el.uppercase, el.lowercase, el.digits, el.symbols, el.excludeLookAlikes,
     el.words, el.separator, el.capitalize,
-    el.patternCategory, el.patternCase, el.patternWords, el.patternDigits,
+    el.patternCategory, el.patternCase, el.patternWords, el.patternMinWordLength, el.patternDigits,
     el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
     el.simpleLength, el.simpleWord,
   ]) {

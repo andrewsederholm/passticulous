@@ -122,6 +122,11 @@ impl WordCategory {
     pub fn words(self) -> &'static [&'static str] {
         &CATEGORY_WORDS[self as usize]
     }
+
+    /// Length of the longest word in the list.
+    pub fn longest_word(self) -> usize {
+        self.words().iter().map(|w| w.len()).max().unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -203,6 +208,7 @@ pub enum GenerateError {
     InvalidOrder,
     SimpleLengthOutOfRange,
     InvalidSimpleWord,
+    NoWordsLongEnough(WordCategory),
 }
 
 impl fmt::Display for GenerateError {
@@ -252,6 +258,12 @@ impl fmt::Display for GenerateError {
             Self::InvalidSimpleWord => write!(
                 f,
                 "word must be 1 to {MAX_SIMPLE_WORD_LEN} characters with no spaces"
+            ),
+            Self::NoWordsLongEnough(category) => write!(
+                f,
+                "min_word_length is too long: the longest {} word is {} characters",
+                category.name(),
+                category.longest_word()
             ),
         }
     }
@@ -304,6 +316,8 @@ impl Default for PassphraseOptions {
 pub struct PatternOptions {
     pub category: WordCategory,
     pub words: usize,
+    /// Only words at least this many characters long are used. 0 for any.
+    pub min_word_length: usize,
     pub case: WordCase,
     pub digits: usize,
     pub symbols: usize,
@@ -322,6 +336,7 @@ impl Default for PatternOptions {
         Self {
             category: WordCategory::Animals,
             words: 1,
+            min_word_length: 0,
             case: WordCase::Title,
             digits: 4,
             symbols: 3,
@@ -513,7 +528,16 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
         }
     };
 
-    let list = opts.category.words();
+    let list: Vec<&str> = opts
+        .category
+        .words()
+        .iter()
+        .copied()
+        .filter(|w| w.len() >= opts.min_word_length)
+        .collect();
+    if list.is_empty() {
+        return Err(GenerateError::NoWordsLongEnough(opts.category));
+    }
     let digits: Vec<char> = DIGITS.chars().collect();
     let mut segments: Vec<String> = Vec::new();
     for part in opts.order {
@@ -985,6 +1009,7 @@ mod tests {
         let opts = PatternOptions {
             category: WordCategory::Colors,
             words: 2,
+            min_word_length: 0,
             case: WordCase::Upper,
             digits: 3,
             symbols: 2,
@@ -1057,6 +1082,52 @@ mod tests {
                 .all(|w| WordCategory::Animals.words().contains(w)),
             "{pw}"
         );
+    }
+
+    #[test]
+    fn pattern_only_uses_words_of_min_word_length() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            category: WordCategory::Elements,
+            min_word_length: 11,
+            case: WordCase::Lower,
+            digits: 0,
+            symbols: 0,
+            ..Default::default()
+        };
+        let long: Vec<&str> = WordCategory::Elements
+            .words()
+            .iter()
+            .copied()
+            .filter(|w| w.len() >= 11)
+            .collect();
+        assert_eq!(long.len(), 10);
+        for _ in 0..200 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            assert!(long.contains(&pp.value.as_str()), "{}", pp.value);
+            // Only the matching words count toward strength.
+            assert!((pp.entropy_bits - 10f64.log2()).abs() < 1e-9);
+        }
+
+        // The longest word is always allowed; one character more is not.
+        for category in WordCategory::ALL {
+            let longest = category.longest_word();
+            let at_longest = PatternOptions {
+                category,
+                min_word_length: longest,
+                ..Default::default()
+            };
+            let pw = generate_pattern(&mut rng, &at_longest).unwrap();
+            assert!(pw.value.len() >= longest, "{}", pw.value);
+            let too_long = PatternOptions {
+                min_word_length: longest + 1,
+                ..at_longest
+            };
+            assert_eq!(
+                generate_pattern(&mut rng, &too_long).unwrap_err(),
+                GenerateError::NoWordsLongEnough(category)
+            );
+        }
     }
 
     #[test]
