@@ -209,6 +209,7 @@ pub enum GenerateError {
     SimpleLengthOutOfRange,
     InvalidSimpleWord,
     NoWordsLongEnough(WordCategory),
+    NoWordsOfLength(WordCategory, usize),
 }
 
 impl fmt::Display for GenerateError {
@@ -265,6 +266,11 @@ impl fmt::Display for GenerateError {
                 category.name(),
                 category.longest_word()
             ),
+            Self::NoWordsOfLength(category, length) => write!(
+                f,
+                "no {} words are exactly {length} characters long",
+                category.name()
+            ),
         }
     }
 }
@@ -318,6 +324,9 @@ pub struct PatternOptions {
     pub words: usize,
     /// Only words at least this many characters long are used. 0 for any.
     pub min_word_length: usize,
+    /// When set, only words exactly this long are used, and
+    /// `min_word_length` is ignored.
+    pub word_length: Option<usize>,
     pub case: WordCase,
     pub digits: usize,
     pub symbols: usize,
@@ -337,6 +346,7 @@ impl Default for PatternOptions {
             category: WordCategory::Animals,
             words: 1,
             min_word_length: 0,
+            word_length: None,
             case: WordCase::Title,
             digits: 4,
             symbols: 3,
@@ -533,10 +543,16 @@ pub fn generate_pattern<R: RngCore + ?Sized>(
         .words()
         .iter()
         .copied()
-        .filter(|w| w.len() >= opts.min_word_length)
+        .filter(|w| match opts.word_length {
+            Some(length) => w.len() == length,
+            None => w.len() >= opts.min_word_length,
+        })
         .collect();
     if list.is_empty() {
-        return Err(GenerateError::NoWordsLongEnough(opts.category));
+        return Err(match opts.word_length {
+            Some(length) => GenerateError::NoWordsOfLength(opts.category, length),
+            None => GenerateError::NoWordsLongEnough(opts.category),
+        });
     }
     let digits: Vec<char> = DIGITS.chars().collect();
     let mut segments: Vec<String> = Vec::new();
@@ -1010,6 +1026,7 @@ mod tests {
             category: WordCategory::Colors,
             words: 2,
             min_word_length: 0,
+            word_length: None,
             case: WordCase::Upper,
             digits: 3,
             symbols: 2,
@@ -1127,6 +1144,44 @@ mod tests {
                 generate_pattern(&mut rng, &too_long).unwrap_err(),
                 GenerateError::NoWordsLongEnough(category)
             );
+        }
+    }
+
+    #[test]
+    fn pattern_only_uses_words_of_exact_word_length() {
+        let mut rng = rng();
+        let opts = PatternOptions {
+            category: WordCategory::Animals,
+            // Ignored when word_length is set.
+            min_word_length: 11,
+            word_length: Some(5),
+            case: WordCase::Lower,
+            digits: 0,
+            symbols: 0,
+            ..Default::default()
+        };
+        for _ in 0..200 {
+            let pp = generate_pattern(&mut rng, &opts).unwrap();
+            assert_eq!(pp.value.len(), 5, "{}", pp.value);
+            assert!(WordCategory::Animals.words().contains(&pp.value.as_str()));
+            // 45 animals have 5 letters.
+            assert!((pp.entropy_bits - 45f64.log2()).abs() < 1e-9);
+        }
+
+        // Space has 10- and 13-letter words but none in between.
+        for (length, ok) in [(10, true), (12, false), (13, true), (0, false)] {
+            let opts = PatternOptions {
+                category: WordCategory::Space,
+                word_length: Some(length),
+                ..Default::default()
+            };
+            match generate_pattern(&mut rng, &opts) {
+                Ok(_) => assert!(ok, "{length}"),
+                Err(err) => {
+                    assert!(!ok, "{length}");
+                    assert_eq!(err, GenerateError::NoWordsOfLength(WordCategory::Space, length));
+                }
+            }
         }
     }
 

@@ -102,9 +102,10 @@
         <input type="range" id="pattern-words" min="1" max="5" value="1">
       </div>
       <div class="field">
-        <label for="pattern-min-word-length">Minimum word length <span id="pattern-min-word-length-value" class="value"></span></label>
+        <label for="pattern-min-word-length">Word length <span id="pattern-min-word-length-value" class="value"></span></label>
         <input type="range" id="pattern-min-word-length" min="1" max="32" value="1">
-        <p class="hint small">Only use words with at least this many letters. Longer limits leave fewer words, so the password gets weaker.</p>
+        <label class="check"><input type="checkbox" id="pattern-exact-length"> Exactly this length</label>
+        <p class="hint small">Only use words with at least this many letters, or exactly this many. Fewer words to choose from makes the password weaker.</p>
       </div>
       <div class="field">
         <label for="pattern-digits">Numbers <span id="pattern-digits-value" class="value"></span></label>

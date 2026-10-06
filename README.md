@@ -34,7 +34,7 @@ Passticulous (pronounced PASS-TICK-YOU-LIS) is a password generator for when you
 - **Patterns**: memorable passwords like `Giraffe3287#@!`. Pick a word type
   (animals, colors, foods, nature, space, periodic elements, or any word from
   the main list), 1–5 words and their case (Title, lower, UPPER), a minimum
-  word length, how many numbers (0–16) and
+  or exact word length, how many numbers (0–16) and
   symbols (0–16), exactly which symbols are allowed (or the same fixed symbols,
   like `#@!`, every time), the order of the three parts, and an optional
   separator.
@@ -246,6 +246,7 @@ Fall, Rose, Sand, Midnight, Arctic, Grape or Graphite) and adjust from there. Th
 | `capitalize`          | `false`    | passphrase |                                |
 | `category`            | `animals`  | pattern    | `animals`, `colors`, `foods`, `nature`, `space`, `elements`, `any` |
 | `min_word_length`     | `0` (any)  | pattern    | only words at least this long; up to the list's longest word |
+| `word_length`         | none       | pattern    | only words exactly this long; overrides `min_word_length` |
 | `case`                | `title`    | pattern    | `title`, `lower` or `upper`    |
 | `digit_count`         | `4`        | pattern    | 0–16                           |
 | `symbol_count`        | `3`        | pattern    | 0–16                           |
@@ -308,7 +309,7 @@ runtime image has no shell or curl.
 - **Entropy figures** assume the attacker knows your settings. They are
   `length × log2(pool size)` for passwords and `words × log2(14014)` for
   passphrases. Patterns add `log2` of the word list size per word (only the
-  words long enough, with a minimum word length), ~3.3 bits
+  words that fit, with a minimum or exact word length), ~3.3 bits
   per number and `log2(allowed symbols)` per symbol (fixed symbols add
   nothing). A single themed word gives
   only ~7–8 bits, so a default pattern is around 30 bits ("Weak"). Patterns are

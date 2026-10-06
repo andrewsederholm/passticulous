@@ -127,7 +127,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .error { color: var(--danger); margin: 0.75rem 0 0; }
 
 .field { margin-bottom: 1rem; }
-.field > label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+.field > label:not(.check) { display: block; font-weight: 600; margin-bottom: 0.35rem; }
 .value { font-weight: 400; color: var(--muted); }
 
 .range-row { display: flex; gap: 0.75rem; align-items: center; }

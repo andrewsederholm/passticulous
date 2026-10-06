@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Exact word length** for patterns: tick "Exactly this length" under the
+  word length slider to only use words of exactly that many letters. Some
+  lengths have no words in some lists (Space has none of 11 or 12 letters),
+  which shows a clear message. Also available in the API as `word_length`,
+  which overrides `min_word_length`.
+
+### Changed
+
+- The pattern "Minimum word length" slider is now called "Word length", since
+  it also sets the exact length.
+
 ## [1.9.0] - 2026-10-05
 
 ### Added

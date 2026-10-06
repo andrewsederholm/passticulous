@@ -145,7 +145,12 @@ function generatePattern(opts, wordlist) {
     throw new Error("Pick at least one allowed symbol, or set Symbols to 0.");
   }
   const applyCase = CASES[opts.case] ?? CASES.title;
-  const words = wordlist.filter((w) => w.length >= opts.minWordLength);
+  const words = wordlist.filter((w) =>
+    opts.wordLength ? w.length === opts.wordLength : w.length >= opts.minWordLength,
+  );
+  if (words.length === 0 && opts.wordLength) {
+    throw new Error(`No words in this list are exactly ${opts.wordLength} letters. Try another length.`);
+  }
   if (words.length === 0) {
     const longest = Math.max(...wordlist.map((w) => w.length));
     throw new Error(`Minimum word length is too long: the longest word in this list is ${longest} letters.`);
@@ -266,6 +271,7 @@ const el = {
   patternWordsValue: $("pattern-words-value"),
   patternMinWordLength: $("pattern-min-word-length"),
   patternMinWordLengthValue: $("pattern-min-word-length-value"),
+  patternExactLength: $("pattern-exact-length"),
   patternDigits: $("pattern-digits"),
   patternDigitsValue: $("pattern-digits-value"),
   patternFixed: $("pattern-fixed"),
@@ -311,7 +317,7 @@ function minWordLength() {
 function fitMinWordLength(list) {
   const input = el.patternMinWordLength;
   const lengths = list.map((w) => w.length);
-  const wasAny = minWordLength() === 0;
+  const wasAny = !el.patternExactLength.checked && minWordLength() === 0;
   input.min = Math.min(...lengths);
   input.max = Math.max(...lengths);
   if (wasAny) input.value = input.min;
@@ -360,7 +366,9 @@ function readOptions() {
       category: el.patternCategory.value,
       case: el.patternCase.value,
       words: intValue(el.patternWords, 1, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS),
-      minWordLength: minWordLength(),
+      // With "Exactly this length", the slider is the exact length instead.
+      minWordLength: el.patternExactLength.checked ? 0 : minWordLength(),
+      wordLength: el.patternExactLength.checked ? Number(el.patternMinWordLength.value) : null,
       digits: intValue(el.patternDigits, 4, 0, MAX_PATTERN_DIGITS),
       symbols: intValue(el.patternSymbols, 3, 0, MAX_PATTERN_SYMBOLS),
       symbolSet: selectedSymbols(),
@@ -413,7 +421,12 @@ function restoreOptions() {
   if (p.case in CASES) el.patternCase.value = p.case;
   if (Number.isInteger(p.words)) el.patternWords.value = clamp(p.words, MIN_PATTERN_WORDS, MAX_PATTERN_WORDS);
   // Fitted to the word list once it loads.
-  if (Number.isInteger(p.minWordLength)) el.patternMinWordLength.value = p.minWordLength;
+  if (Number.isInteger(p.wordLength)) {
+    el.patternExactLength.checked = true;
+    el.patternMinWordLength.value = p.wordLength;
+  } else if (Number.isInteger(p.minWordLength)) {
+    el.patternMinWordLength.value = p.minWordLength;
+  }
   if (Number.isInteger(p.digits)) el.patternDigits.value = clamp(p.digits, 0, MAX_PATTERN_DIGITS);
   if (Number.isInteger(p.symbols)) el.patternSymbols.value = clamp(p.symbols, 0, MAX_PATTERN_SYMBOLS);
   if (typeof p.symbolSet === "string") setSelectedSymbols(p.symbolSet);
@@ -474,7 +487,11 @@ function updateLabels(opts) {
   el.lengthValue.textContent = `(${opts.length})`;
   el.wordsValue.textContent = `(${opts.words})`;
   el.patternWordsValue.textContent = `(${p.words})`;
-  el.patternMinWordLengthValue.textContent = p.minWordLength ? `(${p.minWordLength}+ letters)` : "(any)";
+  el.patternMinWordLengthValue.textContent = p.wordLength
+    ? `(exactly ${p.wordLength} letters)`
+    : p.minWordLength
+      ? `(${p.minWordLength}+ letters)`
+      : "(any)";
   el.patternDigitsValue.textContent = `(${p.digits})`;
   el.patternSymbolsValue.textContent = `(${p.symbols})`;
   el.simpleLengthValue.textContent = `(${opts.simple.minLength})`;
@@ -503,14 +520,17 @@ async function generate() {
       const list = await loadWordlist(opts.pattern.category);
       if (id !== generation) return;
       fitMinWordLength(list);
-      opts.pattern.minWordLength = minWordLength();
+      opts.pattern = readOptions().pattern;
       updateLabels(opts);
       saveOptions(opts);
-      const matching = list.filter((w) => w.length >= opts.pattern.minWordLength).length;
-      el.patternCategorySize.textContent =
-        matching === list.length
+      const p = opts.pattern;
+      const matching = list.filter((w) => (p.wordLength ? w.length === p.wordLength : w.length >= p.minWordLength)).length;
+      const of = `${matching.toLocaleString()} of ${list.length.toLocaleString()} words ${matching === 1 ? "is" : "are"}`;
+      el.patternCategorySize.textContent = p.wordLength
+        ? `${of} exactly ${p.wordLength} letters`
+        : matching === list.length
           ? `${list.length.toLocaleString()} words to choose from`
-          : `${matching.toLocaleString()} of ${list.length.toLocaleString()} words ${matching === 1 ? "is" : "are"} long enough`;
+          : `${of} long enough`;
       result = generatePattern(opts.pattern, list);
     }
     if (id === generation) showResult(result);
@@ -676,7 +696,7 @@ function init() {
   for (const input of [
     el.uppercase, el.lowercase, el.digits, el.symbols, el.excludeLookAlikes,
     el.words, el.separator, el.capitalize,
-    el.patternCategory, el.patternCase, el.patternWords, el.patternMinWordLength, el.patternDigits,
+    el.patternCategory, el.patternCase, el.patternWords, el.patternMinWordLength, el.patternExactLength, el.patternDigits,
     el.patternSymbols, el.patternFixed, el.patternFixedSymbols, el.patternOrder, el.patternSeparator,
     el.simpleLength, el.simpleWord,
   ]) {
