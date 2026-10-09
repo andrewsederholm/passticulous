@@ -23,7 +23,7 @@
 
 Passticulous (pronounced PASS-TICK-YOU-LIS) is a self hostable password generator for when you need to get a little too particular with your passwords. Customize how they're generated, tweak the options however you want, and be as "passticulous" as you'd like. A small Rust binary serves a web UI that generates everything in your browser, plus an optional HTTP API for scripts and `curl`.
 
-Feel free to use it whenever you want at: www.passticulous.com
+Feel free to use it whenever you want at: https://passticulous.com
 
 Or follow along down below to host it in your own homelab!
 
